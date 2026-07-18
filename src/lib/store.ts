@@ -81,10 +81,28 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Content identity of an intent/candidate: normalized text + the polymorphic condition.
+// Re-parsing the same brain-dump yields the same signature, which is how we detect and
+// drop duplicates before they ever reach a collection (fixes duplicate build-up in Today).
+function signature(x: { text: string; condition: ParsedIntent["condition"] }): string {
+  const text = x.text.trim().toLowerCase().replace(/\s+/g, " ");
+  return `${text}||${x.condition.type}||${JSON.stringify(x.condition.value)}`;
+}
+
 // ---- Candidates (Inbox review buffer) --------------------------------------
 
 export function addCandidates(parsed: ParsedIntent[]): void {
-  const next: Candidate[] = parsed.map((p) => ({ ...p, cid: newId("c") }));
+  // Skip anything already sitting in the review buffer, so re-parsing the same
+  // text (or parsing again before confirming) can't stack the same items twice.
+  const seen = new Set(candidates.map(signature));
+  const next: Candidate[] = [];
+  for (const p of parsed) {
+    const sig = signature(p);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    next.push({ ...p, cid: newId("c") });
+  }
+  if (next.length === 0) return;
   candidates = [...next, ...candidates];
   persistCandidates();
   emit();
@@ -116,13 +134,23 @@ function candidateToIntent(c: Candidate, status: Status): Intent {
   };
 }
 
+// Signatures of intents still open in the backlog — the set we must not duplicate into.
+function openSignatures(): Set<string> {
+  return new Set(intents.filter((i) => i.status === "open").map(signature));
+}
+
 // Commit one candidate into the backlog with an explicit status (open by default, or done).
 export function commitCandidate(cid: string, status: Status = "open"): void {
   const c = candidates.find((x) => x.cid === cid);
   if (!c) return;
-  intents = [candidateToIntent(c, status), ...intents];
+  // Drop it from the buffer regardless; only add to the backlog if it isn't already
+  // an open intent (re-parsed duplicates confirm to a no-op instead of piling up).
+  const isDuplicate = status === "open" && openSignatures().has(signature(c));
   candidates = candidates.filter((x) => x.cid !== cid);
-  persistIntents();
+  if (!isDuplicate) {
+    intents = [candidateToIntent(c, status), ...intents];
+    persistIntents();
+  }
   persistCandidates();
   emit();
 }
@@ -130,10 +158,19 @@ export function commitCandidate(cid: string, status: Status = "open"): void {
 // Commit every remaining candidate as an open intent (the "Підтвердити" gate).
 export function commitAllCandidates(): void {
   if (candidates.length === 0) return;
-  const materialized = candidates.map((c) => candidateToIntent(c, "open"));
-  intents = [...materialized, ...intents];
+  const open = openSignatures();
+  const materialized: Intent[] = [];
+  for (const c of candidates) {
+    const sig = signature(c);
+    if (open.has(sig)) continue; // already an open intent — don't duplicate into Today
+    open.add(sig);
+    materialized.push(candidateToIntent(c, "open"));
+  }
+  if (materialized.length > 0) {
+    intents = [...materialized, ...intents];
+    persistIntents();
+  }
   candidates = [];
-  persistIntents();
   persistCandidates();
   emit();
 }

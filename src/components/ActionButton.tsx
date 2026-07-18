@@ -18,7 +18,7 @@ export function ActionButton({
       : tone === "accent"
         ? active
           ? "bg-amber-500 text-white"
-          : "bg-amber-100 text-amber-700"
+          : "bg-stone-100 text-stone-700 hover:bg-stone-200"
         : "bg-stone-100 text-stone-700 hover:bg-stone-200";
   return (
     <button type="button" onClick={onClick} className={`${base} ${styles}`}>
