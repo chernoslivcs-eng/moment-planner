@@ -1,0 +1,178 @@
+"use client";
+
+// localStorage-backed store for the demo (roadmap §1 technical bounds: data lives locally).
+// Two separate collections:
+//   - intents:    the committed backlog (Intent[]). status is human-only.
+//   - candidates: the Inbox review buffer (Candidate[]) — parsed but not yet confirmed.
+// Kept apart so "the user sees the breakdown BEFORE saving" is literal and Intent.status
+// never carries a transient "pending" value.
+
+import { useSyncExternalStore } from "react";
+import type { Candidate, Intent, ParsedIntent, Status } from "./types";
+
+const INTENTS_KEY = "mp.intents.v1";
+const CANDIDATES_KEY = "mp.candidates.v1";
+
+// In-memory source of truth. Starts empty so server render and first client render match;
+// the real data is loaded from localStorage after mount (in the first subscribe).
+let intents: Intent[] = [];
+let candidates: Candidate[] = [];
+let loaded = false;
+
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const l of listeners) l();
+}
+
+function readKey<T>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadOnce() {
+  if (loaded || typeof window === "undefined") return;
+  intents = readKey<Intent>(INTENTS_KEY);
+  candidates = readKey<Candidate>(CANDIDATES_KEY);
+  loaded = true;
+}
+
+function persistIntents() {
+  try {
+    localStorage.setItem(INTENTS_KEY, JSON.stringify(intents));
+  } catch {
+    // demo scope: ignore quota/serialization failures
+  }
+}
+
+function persistCandidates() {
+  try {
+    localStorage.setItem(CANDIDATES_KEY, JSON.stringify(candidates));
+  } catch {
+    // demo scope
+  }
+}
+
+function subscribe(listener: () => void) {
+  // First subscriber (client-only) loads persisted data, then notifies so views refresh.
+  if (!loaded) {
+    loadOnce();
+    if (loaded) Promise.resolve().then(emit);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const EMPTY_INTENTS: Intent[] = [];
+const EMPTY_CANDIDATES: Candidate[] = [];
+
+function newId(prefix: string): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ---- Candidates (Inbox review buffer) --------------------------------------
+
+export function addCandidates(parsed: ParsedIntent[]): void {
+  const next: Candidate[] = parsed.map((p) => ({ ...p, cid: newId("c") }));
+  candidates = [...next, ...candidates];
+  persistCandidates();
+  emit();
+}
+
+export function removeCandidate(cid: string): void {
+  candidates = candidates.filter((c) => c.cid !== cid);
+  persistCandidates();
+  emit();
+}
+
+export function toggleCandidatePinToday(cid: string): void {
+  candidates = candidates.map((c) =>
+    c.cid === cid ? { ...c, pinToday: !c.pinToday } : c,
+  );
+  persistCandidates();
+  emit();
+}
+
+function candidateToIntent(c: Candidate, status: Status): Intent {
+  return {
+    id: newId("i"),
+    text: c.text,
+    priority: c.priority,
+    status,
+    condition: c.condition,
+    createdAt: new Date().toISOString(),
+    todayOverride: c.pinToday ? "in" : null,
+  };
+}
+
+// Commit one candidate into the backlog with an explicit status (open by default, or done).
+export function commitCandidate(cid: string, status: Status = "open"): void {
+  const c = candidates.find((x) => x.cid === cid);
+  if (!c) return;
+  intents = [candidateToIntent(c, status), ...intents];
+  candidates = candidates.filter((x) => x.cid !== cid);
+  persistIntents();
+  persistCandidates();
+  emit();
+}
+
+// Commit every remaining candidate as an open intent (the "Підтвердити" gate).
+export function commitAllCandidates(): void {
+  if (candidates.length === 0) return;
+  const materialized = candidates.map((c) => candidateToIntent(c, "open"));
+  intents = [...materialized, ...intents];
+  candidates = [];
+  persistIntents();
+  persistCandidates();
+  emit();
+}
+
+// ---- Intents (committed backlog) -------------------------------------------
+
+export function setIntentStatus(id: string, status: Status): void {
+  intents = intents.map((i) => (i.id === id ? { ...i, status } : i));
+  persistIntents();
+  emit();
+}
+
+export function setTodayOverride(id: string, value: Intent["todayOverride"]): void {
+  intents = intents.map((i) => (i.id === id ? { ...i, todayOverride: value } : i));
+  persistIntents();
+  emit();
+}
+
+// ---- React bindings --------------------------------------------------------
+
+export function useIntents(): Intent[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => intents,
+    () => EMPTY_INTENTS,
+  );
+}
+
+export function useCandidates(): Candidate[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => candidates,
+    () => EMPTY_CANDIDATES,
+  );
+}
+
+// Test-only reset (not used in the app).
+export function __resetStoreForTests(): void {
+  intents = [];
+  candidates = [];
+  loaded = false;
+}
