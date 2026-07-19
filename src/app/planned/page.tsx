@@ -196,13 +196,101 @@ function calTitle(mode: CalMode, now: Date): string {
 // useLayoutEffect on the client (measure before paint → no flash); inert no-op on the server.
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+// The current Monday-anchored week (7 cells) — the compact row shown in the sticky strip once
+// the full month scrolls away. Same dayKey/out scheme as buildCells, so dots/selection line up.
+function currentWeekCells(now: Date): Cell[] {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const mondayOffset = (now.getDay() + 6) % 7;
+  const monday = new Date(year, month, now.getDate() - mondayOffset);
+  const cells: Cell[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    cells.push({ blank: false, day: d.getDate(), key: dayKey(d), out: d.getMonth() !== month });
+  }
+  return cells;
+}
+
+// One grid cell — shared by every calendar surface (month grid, tap-compact, sticky week strip)
+// so dot markers, selection (clay fill), today-highlight and out-of-month dimming stay identical
+// no matter which lens renders it. A day with intents is a tappable filter; a bare day is inert.
+function renderCell(
+  c: Cell,
+  i: number,
+  todayKey: string,
+  selectedKey: string | null,
+  counts: Map<string, number>,
+  onSelect: (key: string) => void,
+) {
+  if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
+  const isToday = c.key === todayKey;
+  const isSelected = c.key === selectedKey;
+
+  if (counts.has(c.key)) {
+    return (
+      <button
+        key={c.key}
+        type="button"
+        aria-pressed={isSelected}
+        aria-label={`${c.day} — є наміри`}
+        onClick={() => onSelect(c.key)}
+        className={`relative flex aspect-square items-center justify-center rounded-xl text-sm font-semibold transition active:scale-[0.94] ${
+          isSelected
+            ? "bg-clay text-white"
+            : isToday
+              ? "bg-surface text-ink shadow-card"
+              : c.out
+                ? "text-ink-2"
+                : "text-ink"
+        }`}
+      >
+        {c.day}
+        <span
+          className={`absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full ${
+            isSelected ? "bg-white" : "bg-clay"
+          }`}
+          aria-hidden
+        />
+      </button>
+    );
+  }
+
+  // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
+  return (
+    <span
+      key={c.key}
+      className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
+        isToday
+          ? "bg-surface font-bold text-ink shadow-card"
+          : c.out
+            ? "font-medium text-ink-3/60"
+            : "font-medium text-ink-3/90"
+      }`}
+    >
+      {c.day}
+    </span>
+  );
+}
+
+// Reads the ?collapse=scroll flag once on the client. Default (flag absent) keeps the proven
+// tap-handle calendar; the flag opts into the experimental scroll-collapse lens so it can be
+// tried on a real device via the preview URL without disturbing the safe default.
+function useScrollCollapseFlag(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    setOn(new URLSearchParams(window.location.search).get("collapse") === "scroll");
+  }, []);
+  return on;
+}
+
 function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
       <path
         d="M6 9l6 6 6-6"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -282,6 +370,8 @@ function CalendarLens({
 
   return (
     <div className="mb-6 px-0.5">
+      {/* Тап-хендл згортання. Праворуч — помітний чип зі станом дії, щоб було ясно,
+          що заголовок тапається (скрол-тригер свідомо не робимо — див. рішення A). */}
       <button
         type="button"
         onClick={toggleMode}
@@ -289,14 +379,17 @@ function CalendarLens({
         aria-label={
           mode === "month" ? "Згорнути календар до двох тижнів" : "Розгорнути календар на місяць"
         }
-        className="mb-3 flex w-full items-center gap-1.5 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
+        className="group mb-3 flex w-full items-center justify-between gap-2 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
       >
         <span>{title}</span>
-        <ChevronIcon
-          className={`h-4 w-4 flex-none text-ink-3 transition-transform duration-300 ${
-            mode === "month" ? "rotate-180" : ""
-          }`}
-        />
+        <span className="inline-flex flex-none items-center gap-1 rounded-full border border-clay/25 bg-clay/10 px-2.5 py-1 text-[12px] font-semibold text-clay transition group-active:scale-95">
+          {mode === "month" ? "згорнути" : "розгорнути"}
+          <ChevronIcon
+            className={`h-3.5 w-3.5 transition-transform duration-300 ${
+              mode === "month" ? "rotate-180" : ""
+            }`}
+          />
+        </span>
       </button>
 
       <div ref={bodyRef}>
@@ -308,56 +401,120 @@ function CalendarLens({
           ))}
         </div>
         <div ref={gridRef} className="grid grid-cols-7 gap-1">
-          {cells.map((c, i) => {
-            if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
-            const isToday = c.key === todayKey;
-            const isSelected = c.key === selectedKey;
+          {cells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            if (counts.has(c.key)) {
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  aria-label={`${c.day} — є наміри`}
-                  onClick={() => onSelect(c.key)}
-                  className={`relative flex aspect-square items-center justify-center rounded-xl text-sm font-semibold transition active:scale-[0.94] ${
-                    isSelected
-                      ? "bg-clay text-white"
-                      : isToday
-                        ? "bg-surface text-ink shadow-card"
-                        : c.out
-                          ? "text-ink-2"
-                          : "text-ink"
-                  }`}
-                >
-                  {c.day}
-                  <span
-                    className={`absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full ${
-                      isSelected ? "bg-white" : "bg-clay"
-                    }`}
-                    aria-hidden
-                  />
-                </button>
-              );
-            }
+// ── sticky collapsing-header calendar (scroll-driven, flag: ?collapse=scroll) ─
+// A TRUE native collapsing header, not a height morph. The full month grid sits in normal
+// flow and scrolls away with the window — buttery, no reflow. A compact current-week strip is
+// `position: sticky; top:0`, pinned over the list; it starts invisible and cross-fades IN as
+// the month scrolls up. Space is reclaimed by SCROLLING PAST the tall month, never by shrinking
+// an above-viewport element — that is what keeps iOS smooth (no scroll-anchor jump, since we
+// never resize content above the viewport). The strip overlaps the month via a measured
+// negative margin so there is no blank gap while it is invisible. Only opacity/pointer-events
+// change at runtime (GPU-composited); the pin itself is pure CSS.
+function StickyCalendarLens({
+  now,
+  counts,
+  selectedKey,
+  onSelect,
+}: {
+  now: Date;
+  counts: Map<string, number>;
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+}) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const monthRef = useRef<HTMLDivElement>(null);
+  const [stripH, setStripH] = useState(0);
+  const rafRef = useRef<number | null>(null);
 
-            // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
-            return (
-              <span
-                key={c.key}
-                className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
-                  isToday
-                    ? "bg-surface font-bold text-ink shadow-card"
-                    : c.out
-                      ? "font-medium text-ink-3/60"
-                      : "font-medium text-ink-3/90"
-                }`}
-              >
-                {c.day}
-              </span>
-            );
-          })}
+  const todayKey = dayKey(now);
+  const monthCells = buildCells("month", now);
+  const weekCells = currentWeekCells(now);
+  const monthTitle = calTitle("month", now);
+
+  // Measure the strip before paint so the month's negative margin overlaps it exactly (no gap,
+  // no one-frame jump). Re-measures if the day (hence layout) changes.
+  useIsomorphicLayoutEffect(() => {
+    if (stripRef.current) setStripH(stripRef.current.offsetHeight);
+  }, [now]);
+
+  // Passive, rAF-throttled scroll → crossfade. progress = how far the month has scrolled above
+  // the pinned strip, normalised over the month's collapsible height. A smoothstep + dead-band
+  // (hysteresis) keeps interactivity from flickering when a finger hovers near the midpoint.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const month = monthRef.current;
+    if (!strip || !month) return;
+
+    const apply = () => {
+      rafRef.current = null;
+      const sh = strip.offsetHeight || 1;
+      const range = Math.max(month.offsetHeight - sh, 1);
+      // month top relative to viewport: === strip top until the strip pins at 0, then goes
+      // negative as the month scrolls up behind it.
+      const monthTop = month.getBoundingClientRect().top;
+      const raw = Math.min(Math.max(-monthTop / range, 0), 1);
+      const p = raw * raw * (3 - 2 * raw); // smoothstep
+      strip.style.opacity = String(p);
+      month.style.opacity = String(1 - p);
+      // hysteresis dead-band: don't hand pointer control over until clearly on one side.
+      strip.style.pointerEvents = p > 0.6 ? "auto" : "none";
+      month.style.pointerEvents = p < 0.4 ? "auto" : "none";
+    };
+    const onScroll = () => {
+      if (rafRef.current != null) return;
+      rafRef.current = requestAnimationFrame(apply);
+    };
+
+    apply(); // set the initial (scrolled-to-top) state
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [stripH]);
+
+  return (
+    <div className="mb-6 px-0.5">
+      {/* Compact current-week strip — pinned at top, cross-fades in as the month scrolls away.
+          -mx-5 px-5 lets its blurred paper background span full-bleed over the page gutter. */}
+      <div
+        ref={stripRef}
+        className="sticky top-0 z-20 -mx-5 border-b border-line-soft bg-paper/95 px-5 pb-2 pt-3 backdrop-blur"
+        style={{ opacity: 0, pointerEvents: "none" }}
+      >
+        <div className="mb-1.5 flex items-center justify-between px-0.5">
+          <span className="font-display text-[13px] font-semibold tracking-wide text-ink-2">
+            {monthTitle}
+          </span>
+          <span className="text-[11px] font-medium tracking-wide text-ink-3">цей тиждень</span>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {weekCells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
+        </div>
+      </div>
+
+      {/* Full month — normal flow, scrolls away. Negative margin pulls it up to overlap the
+          (initially invisible) strip so there is no blank band at rest. */}
+      <div ref={monthRef} style={{ marginTop: stripH ? -stripH : 0 }}>
+        <div className="mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2">
+          {monthTitle}
+        </div>
+        <div className="mb-1.5 grid grid-cols-7 gap-1">
+          {WEEKDAY_LABELS.map((w) => (
+            <span key={w} className="text-center text-[10px] font-semibold tracking-wide text-ink-3">
+              {w}
+            </span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {monthCells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
         </div>
       </div>
     </div>
@@ -403,6 +560,7 @@ export default function PlannedPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollCollapse = useScrollCollapseFlag();
   const now = new Date();
 
   // Re-derive on the same triggers as «Сьогодні» so the split stays consistent.
@@ -494,14 +652,25 @@ export default function PlannedPage() {
         />
       ) : (
         <>
-          {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри. */}
+          {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри.
+              За замовчуванням — перевірений тап-хендл; ?collapse=scroll вмикає експериментальний
+              collapsing-header по скролу (тап лишається як безпечний фолбек). */}
           {timeWaiting.length > 0 ? (
-            <CalendarLens
-              now={now}
-              counts={dayCounts}
-              selectedKey={activeKey}
-              onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
-            />
+            scrollCollapse ? (
+              <StickyCalendarLens
+                now={now}
+                counts={dayCounts}
+                selectedKey={activeKey}
+                onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
+              />
+            ) : (
+              <CalendarLens
+                now={now}
+                counts={dayCounts}
+                selectedKey={activeKey}
+                onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
+              />
+            )
           ) : null}
 
           {activeKey ? (
