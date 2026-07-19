@@ -37,10 +37,25 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 500px at 50% -10%, #faf5ea 0%, transparent 60%),
-    var(--color-paper);
+  background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient warm glow. It must stay anchored to the viewport, not ride the scroll.
+   The gradient used to live on <body> with the default `background-attachment: scroll`,
+   but <html class="h-full"> is the scroll container while <body> grows to content height —
+   so the glow was painted on the tall scrolling body and slid away as you scrolled.
+   `background-attachment: fixed` pins it on desktop but is unreliable on iOS Safari
+   (often ignored / janky). A `position: fixed` decorative layer holds steady on iOS. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, #faf5ea 0%, transparent 60%),
+    var(--color-paper);
+  pointer-events: none;
 }
