@@ -112,6 +112,127 @@ function groupByDay(items: Intent[], now: Date): DayGroup[] {
   return groups;
 }
 
+// ── calendar lens (static month grid, Monday-first) ────────────────────────
+// A quiet "lens over the list", NOT a second calendar. It reads the SAME day resolution
+// (timeGroupDate) that already groups the «Час» section — no new date logic, no model
+// fields. Days that carry a future time intent get a dot and become tappable; a tap filters
+// the list below to that day. Collapsing month→two-weeks is a later step (3B-2).
+const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"] as const;
+
+// Local calendar-day key (YYYY-MM-DD) from local Y/M/D — never toISOString (that is UTC and
+// could cross a day boundary). Matches the local dayStart timeGroupDate already returns.
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function keyToDate(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// day-key → how many future time intents fall on it (drives the dot markers).
+function datedCounts(items: Intent[], now: Date): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const date = timeGroupDate(it.condition, now);
+    if (!date) continue; // undated (daypart/unknown weekday) → not placeable on the grid
+    const key = dayKey(date);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+type Cell = { blank: true } | { blank: false; day: number; key: string };
+
+function CalendarLens({
+  now,
+  counts,
+  selectedKey,
+  onSelect,
+}: {
+  now: Date;
+  counts: Map<string, number>;
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+}) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const offset = (monthStart.getDay() + 6) % 7; // leading blanks so week starts Monday
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = dayKey(now);
+  const title = cap(
+    new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" }).format(monthStart),
+  );
+
+  const cells: Cell[] = [];
+  for (let i = 0; i < offset; i++) cells.push({ blank: true });
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ blank: false, day: d, key: dayKey(new Date(year, month, d)) });
+  }
+
+  return (
+    <div className="mb-6 px-0.5">
+      <p className="mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2">
+        {title}
+      </p>
+      <div className="mb-1.5 grid grid-cols-7 gap-1">
+        {WEEKDAY_LABELS.map((w) => (
+          <span key={w} className="text-center text-[10px] font-semibold tracking-wide text-ink-3">
+            {w}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((c, i) => {
+          if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
+          const isToday = c.key === todayKey;
+          const isSelected = c.key === selectedKey;
+
+          if (counts.has(c.key)) {
+            return (
+              <button
+                key={c.key}
+                type="button"
+                aria-pressed={isSelected}
+                aria-label={`${c.day} — є наміри`}
+                onClick={() => onSelect(c.key)}
+                className={`relative flex aspect-square items-center justify-center rounded-xl text-sm font-semibold transition active:scale-[0.94] ${
+                  isSelected
+                    ? "bg-clay text-white"
+                    : isToday
+                      ? "bg-surface text-ink shadow-card"
+                      : "text-ink"
+                }`}
+              >
+                {c.day}
+                <span
+                  className={`absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full ${
+                    isSelected ? "bg-white" : "bg-clay"
+                  }`}
+                  aria-hidden
+                />
+              </button>
+            );
+          }
+
+          // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
+          return (
+            <span
+              key={c.key}
+              className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
+                isToday ? "bg-surface font-bold text-ink shadow-card" : "font-medium text-ink-3/90"
+              }`}
+            >
+              {c.day}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── soon card (a recognized non-time condition on a not-yet-enabled axis) ───
 // Never produced by the current parser (location collapses to "none"), so this section stays
 // hidden in practice — but it's built so it renders correctly once a non-time axis exists.
@@ -149,6 +270,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export default function PlannedPage() {
   const intents = useIntents();
   const [waiting, setWaiting] = useState<Intent[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const now = new Date();
@@ -188,6 +310,17 @@ export default function PlannedPage() {
   const otherWaiting = waiting.filter((i) => i.condition.type !== "time");
   const dayGroups = groupByDay(timeWaiting, now);
   const isEmpty = timeWaiting.length === 0 && otherWaiting.length === 0;
+
+  // Calendar lens: dot map + a resilient selection (drop a stale day if its dot vanished
+  // after a re-derive, so the filter can't strand the user on an empty day).
+  const dayCounts = datedCounts(timeWaiting, now);
+  const activeKey = selectedKey && dayCounts.has(selectedKey) ? selectedKey : null;
+  const selectedItems = activeKey
+    ? timeWaiting.filter((i) => {
+        const d = timeGroupDate(i.condition, now);
+        return d ? dayKey(d) === activeKey : false;
+      })
+    : [];
 
   return (
     <main className="flex flex-1 flex-col px-5 pt-10">
@@ -231,46 +364,86 @@ export default function PlannedPage() {
         />
       ) : (
         <>
-          {/* Секція «Час» — future time intents grouped by day. */}
+          {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри. */}
           {timeWaiting.length > 0 ? (
-            <section>
-              <SectionLabel>Час</SectionLabel>
-              {dayGroups.map((group) => (
-                <div key={group.key} className="mb-5">
-                  <p className="mb-2.5 px-1 font-display text-sm font-semibold tracking-wide text-ink-2">
-                    {group.label}
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    {group.items.map((intent) => (
-                      <IntentCard
-                        key={intent.id}
-                        text={intent.text}
-                        priority={intent.priority}
-                        condition={intent.condition}
-                        now={now}
-                        state="waiting"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </section>
+            <CalendarLens
+              now={now}
+              counts={dayCounts}
+              selectedKey={activeKey}
+              onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
+            />
           ) : null}
 
-          {/* Секція «Інші умови · скоро» — recognized non-time conditions, axis not yet on. */}
-          {otherWaiting.length > 0 ? (
-            <section className="mt-4">
-              <SectionLabel>Інші умови · скоро</SectionLabel>
-              <p className="mb-3 px-1 font-display text-[13px] italic leading-relaxed text-ink-3">
-                Продукт уже почув ці умови. Виринуть, коли ми ввімкнемо відповідну вісь.
-              </p>
+          {activeKey ? (
+            /* Обрано день у календарі — список звужено до цієї дати. */
+            <section>
+              <div className="mb-4 flex items-center gap-2.5 px-1 font-display text-sm font-semibold text-ink-2">
+                <span>Обрано {dayLabel(keyToDate(activeKey), now)}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedKey(null)}
+                  className="text-[12px] font-semibold text-clay underline underline-offset-2"
+                >
+                  показати все
+                </button>
+              </div>
               <div className="flex flex-col gap-3">
-                {otherWaiting.map((intent) => (
-                  <SoonCard key={intent.id} intent={intent} now={now} />
+                {selectedItems.map((intent) => (
+                  <IntentCard
+                    key={intent.id}
+                    text={intent.text}
+                    priority={intent.priority}
+                    condition={intent.condition}
+                    now={now}
+                    state="waiting"
+                  />
                 ))}
               </div>
             </section>
-          ) : null}
+          ) : (
+            <>
+              {/* Секція «Час» — future time intents grouped by day. */}
+              {timeWaiting.length > 0 ? (
+                <section>
+                  <SectionLabel>Час</SectionLabel>
+                  {dayGroups.map((group) => (
+                    <div key={group.key} className="mb-5">
+                      <p className="mb-2.5 px-1 font-display text-sm font-semibold tracking-wide text-ink-2">
+                        {group.label}
+                      </p>
+                      <div className="flex flex-col gap-3">
+                        {group.items.map((intent) => (
+                          <IntentCard
+                            key={intent.id}
+                            text={intent.text}
+                            priority={intent.priority}
+                            condition={intent.condition}
+                            now={now}
+                            state="waiting"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              {/* Секція «Інші умови · скоро» — recognized non-time conditions, axis not yet on. */}
+              {otherWaiting.length > 0 ? (
+                <section className="mt-4">
+                  <SectionLabel>Інші умови · скоро</SectionLabel>
+                  <p className="mb-3 px-1 font-display text-[13px] italic leading-relaxed text-ink-3">
+                    Продукт уже почув ці умови. Виринуть, коли ми ввімкнемо відповідну вісь.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {otherWaiting.map((intent) => (
+                      <SoonCard key={intent.id} intent={intent} now={now} />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </>
+          )}
         </>
       )}
 
