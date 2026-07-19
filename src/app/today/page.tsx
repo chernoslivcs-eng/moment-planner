@@ -9,19 +9,23 @@ import { currentContext } from "@/lib/conditions/context";
 import { buildToday, type TodayView } from "@/lib/today";
 import { pluralizeIntents } from "@/lib/format";
 import { setIntentStatus, setTodayOverride, useIntents } from "@/lib/store";
+import { useCurrentCity } from "@/lib/geo/currentCity";
 
 export default function TodayPage() {
   const intents = useIntents();
   const { open } = useCaptureSheet();
   const [view, setView] = useState<TodayView>({ active: [], overdue: [] });
+  // Current city (real geolocation → reverse-geocoding). null until resolved / if geo is silent.
+  const city = useCurrentCity();
   const now = new Date();
 
   // Re-evaluate on every trigger (mount, tab focus, visibility) — never a one-shot compute
-  // at startup (roadmap §2, requirement 3). Membership is derived fresh each time.
+  // at startup (roadmap §2, requirement 3). Membership is derived fresh each time. Re-runs when
+  // the city resolves so a matching city intent surfaces the moment we know where we are.
   useEffect(() => {
     let cancelled = false;
     const run = () => {
-      buildToday(intents, currentContext()).then((v) => {
+      buildToday(intents, currentContext(city)).then((v) => {
         if (!cancelled) setView(v);
       });
     };
@@ -33,7 +37,7 @@ export default function TodayPage() {
       window.removeEventListener("focus", run);
       document.removeEventListener("visibilitychange", run);
     };
-  }, [intents]);
+  }, [intents, city]);
 
   const isEmpty = view.active.length === 0 && view.overdue.length === 0;
 

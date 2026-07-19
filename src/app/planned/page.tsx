@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday } from "@/lib/today";
 import { useIntents } from "@/lib/store";
+import { useCurrentCity } from "@/lib/geo/currentCity";
 import { describeCondition } from "@/lib/format";
 import { addDays, dayStart, isSameLocalDay, nearestWeekday } from "@/lib/dates";
 import type { Condition, Intent, Priority } from "@/lib/types";
@@ -420,13 +421,16 @@ export default function PlannedPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Same current-city source as «Сьогодні», so a city intent that surfaced there is correctly
+  // excluded from the waiting field here (and reappears when you leave that city).
+  const city = useCurrentCity();
   const now = new Date();
 
-  // Re-derive on the same triggers as «Сьогодні» so the split stays consistent.
+  // Re-derive on the same triggers as «Сьогодні» so the split stays consistent (and on city).
   useEffect(() => {
     let cancelled = false;
     const run = () => {
-      buildToday(intents, currentContext()).then((view) => {
+      buildToday(intents, currentContext(city)).then((view) => {
         if (cancelled) return;
         const surfaced = new Set([...view.active, ...view.overdue].map((i) => i.id));
         setWaiting(intents.filter((i) => i.status === "open" && !surfaced.has(i.id)));
@@ -440,7 +444,7 @@ export default function PlannedPage() {
       window.removeEventListener("focus", run);
       document.removeEventListener("visibilitychange", run);
     };
-  }, [intents]);
+  }, [intents, city]);
 
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
