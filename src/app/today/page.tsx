@@ -7,6 +7,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { useCaptureSheet } from "@/components/CaptureSheet";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday, type TodayView } from "@/lib/today";
+import { pluralizeIntents } from "@/lib/format";
 import { setIntentStatus, setTodayOverride, useIntents } from "@/lib/store";
 
 export default function TodayPage() {
@@ -57,6 +58,16 @@ export default function TodayPage() {
     );
   }
 
+  // Live italic subtitle (prototype `.date`): weekday + day + month — surfaced-intent count.
+  // Date is the browser-local wall day; count is the active («Сьогодні») intents.
+  const activeCount = view.active.length;
+  const dayLabel = new Intl.DateTimeFormat("uk-UA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(now);
+  const daySubtitle = `${dayLabel} — виринуло ${activeCount} ${pluralizeIntents(activeCount)}`;
+
   return (
     <main className="flex flex-1 flex-col px-5 pt-10">
       <header className="mb-5 pt-2">
@@ -66,7 +77,9 @@ export default function TodayPage() {
         <h1 className="mt-2 font-display text-[33px] font-semibold leading-[1.05] tracking-tight text-ink">
           Сьогодні
         </h1>
-        <p className="mt-1.5 text-sm leading-relaxed text-ink-2">Твій план на день.</p>
+        <p className="mt-1.5 font-display text-[15px] italic leading-relaxed text-ink-2">
+          {daySubtitle}
+        </p>
       </header>
 
       <div className="flex flex-col gap-3">
@@ -78,22 +91,8 @@ export default function TodayPage() {
             condition={intent.condition}
             now={now}
             state="today"
-            actions={
-              <>
-                <ActionButton onClick={() => setIntentStatus(intent.id, "done")}>
-                  ✓ Виконано
-                </ActionButton>
-                <ActionButton
-                  tone="danger"
-                  onClick={() => setIntentStatus(intent.id, "released")}
-                >
-                  Відпустити
-                </ActionButton>
-                <ActionButton tone="neutral" onClick={() => setTodayOverride(intent.id, "out")}>
-                  Прибрати з сьогодні
-                </ActionButton>
-              </>
-            }
+            onComplete={() => setIntentStatus(intent.id, "done")}
+            onDismiss={() => setTodayOverride(intent.id, "out")}
           />
         ))}
       </div>

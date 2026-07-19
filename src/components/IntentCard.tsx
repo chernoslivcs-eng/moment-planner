@@ -47,6 +47,32 @@ function ConditionIcon({ condition }: { condition: Condition }) {
   return condition.type === "time" ? <ClockIcon /> : <AnytimeIcon />;
 }
 
+// The «Сьогодні» active-card affordances (prototype todayCard): a large tap-target
+// tick on the LEFT (mark done) and a small corner X on the TOP-RIGHT (drop from today).
+// Both are opt-in — rendered only when the matching callback is passed — so the shared
+// card stays a plain card everywhere else (Заплановано list, Розбір sheet, empty-state).
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden>
+      <path
+        d="M5 12.5l4.5 4.5L19 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IntentCard({
   text,
   priority,
@@ -54,6 +80,9 @@ export function IntentCard({
   now,
   actions,
   state = "today",
+  onComplete,
+  onDismiss,
+  done = false,
 }: {
   text: string;
   priority: Priority;
@@ -61,12 +90,32 @@ export function IntentCard({
   now?: Date;
   actions?: ReactNode;
   state?: IntentCardState;
+  onComplete?: () => void;
+  onDismiss?: () => void;
+  done?: boolean;
 }) {
   const isToday = state === "today";
   const isGone = state === "gone";
 
   return (
-    <div className={`relative rounded-card p-4 transition ${CONTAINER[state]}`}>
+    <div
+      className={`relative rounded-card p-4 transition ${CONTAINER[state]} ${
+        done ? "opacity-55" : ""
+      }`}
+    >
+      {/* corner X — drop from today (opt-in) */}
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Прибрати з сьогодні"
+          title="прибрати з сьогодні"
+          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-line-soft bg-paper text-ink-3 transition active:scale-[0.88]"
+        >
+          <CloseIcon />
+        </button>
+      ) : null}
+
       <div className="flex gap-3">
         {/* gone keeps a leading dot beside its italic caption (it has no meta chip);
             today & waiting instead carry priority in the meta row, below. */}
@@ -77,11 +126,25 @@ export function IntentCard({
           />
         ) : null}
 
+        {/* tick — mark done (opt-in): fills clay when done, empty circle otherwise */}
+        {onComplete ? (
+          <button
+            type="button"
+            onClick={onComplete}
+            aria-label="Виконано"
+            className={`mt-0.5 flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full border-[1.8px] transition active:scale-90 ${
+              done ? "border-clay bg-clay text-white" : "border-line text-transparent"
+            }`}
+          >
+            <CheckIcon />
+          </button>
+        ) : null}
+
         <div className="min-w-0 flex-1">
           <p
             className={`text-[15px] leading-snug break-words ${
               isToday ? "font-medium text-ink" : "font-normal text-ink-2"
-            }`}
+            } ${done ? "text-ink-3 line-through" : ""} ${onDismiss ? "pr-8" : ""}`}
           >
             {text}
           </p>
