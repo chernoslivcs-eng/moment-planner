@@ -43,11 +43,35 @@ function normalizeDaypart(v: unknown): Daypart | null {
     : null;
 }
 
+// Wall-clock, zone-neutral. The model returns the time exactly as the user said it —
+// "18:00" with no timezone — and we must keep it that way. The old code did
+// `new Date(s).toISOString()`, which anchors a naive string to the RUNTIME's timezone and
+// re-emits UTC: on a UTC server (Vercel) "18:00" froze as 18:00Z, then a Kyiv browser
+// rendered it as 21:00 (the +3 bug). Locally it was invisible because server and browser
+// shared the Kyiv zone and the two shifts cancelled.
+//
+// Fix: read the wall-clock components literally (regex, no Date()/toISOString round-trip)
+// and store a naive ISO string with no `Z`/offset. No timezone math ever touches the value,
+// so the stored hour is byte-identical regardless of where the parse runs. A UTC probe via
+// Date.UTC (which ignores the runtime zone) only validates that the components form a real
+// calendar moment; it never influences the output.
 function normalizeAt(v: unknown): string | null {
   const s = toStr(v);
   if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  const [, y, mo, d, hh = "00", mi = "00", ss = "00"] = m;
+  const probe = new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mi, +ss));
+  // Reject impossible dates (e.g. month 13, day 32) — Date.UTC rolls them over.
+  if (
+    Number.isNaN(probe.getTime()) ||
+    probe.getUTCFullYear() !== +y ||
+    probe.getUTCMonth() !== +mo - 1 ||
+    probe.getUTCDate() !== +d
+  ) {
+    return null;
+  }
+  return `${y}-${mo}-${d}T${hh}:${mi}:${ss}`;
 }
 
 // Turns a raw condition into a clean one. Only "time" and "none" are produced by the core.

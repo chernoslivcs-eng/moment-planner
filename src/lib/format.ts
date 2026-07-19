@@ -39,16 +39,28 @@ function formatDate(d: Date, now: Date): string {
   return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long" }).format(d);
 }
 
-function formatTime(d: Date): string {
-  return new Intl.DateTimeFormat("uk-UA", { hour: "2-digit", minute: "2-digit" }).format(d);
+// Wall-clock time, zone-neutral. `at` is a naive ISO string (no offset) holding the exact
+// hour the user named. We pin its components to UTC purely for formatting — parse with a
+// trailing `Z` and render with timeZone:"UTC" — so the shown hour equals the typed hour on
+// any server/browser. No local offset is ever added or subtracted (18:00 in → 18:00 out).
+// The date label above stays browser-local on purpose: it answers "is this the user's today".
+function formatTime(at: string): string {
+  const d = new Date(`${at.replace(/Z$/, "")}Z`);
+  return new Intl.DateTimeFormat("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(d);
 }
 
 function describeTime(value: TimeValue, now: Date): string {
   switch (value.kind) {
     case "datetime": {
       if (!value.at) return "Сьогодні";
+      // Date label from a local parse (recovers the wall calendar day robustly); time from
+      // the raw wall string (zone-neutral). Both read the same naive `at`, no offset applied.
       const d = new Date(value.at);
-      return `${formatDate(d, now)}, ${formatTime(d)}`;
+      return `${formatDate(d, now)}, ${formatTime(value.at)}`;
     }
     case "date": {
       if (!value.at) return "Сьогодні";
