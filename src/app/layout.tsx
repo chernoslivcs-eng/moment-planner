@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Spectral } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { CaptureSheetProvider } from "@/components/CaptureSheet";
 
 // Body text — Manrope. Cyrillic subset is mandatory (Ukrainian UI).
 const manrope = Manrope({
@@ -36,8 +37,10 @@ export default function RootLayout({
       className={`${manrope.variable} ${spectral.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
-        <BottomNav />
+        <CaptureSheetProvider>
+          <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
+          <BottomNav />
+        </CaptureSheetProvider>
       </body>
     </html>
   );

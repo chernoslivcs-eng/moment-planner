@@ -1,16 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IntentCard } from "@/components/IntentCard";
 import { EmptyState } from "@/components/EmptyState";
 import { ActionButton } from "@/components/ActionButton";
+import { useCaptureSheet } from "@/components/CaptureSheet";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday, type TodayView } from "@/lib/today";
 import { setIntentStatus, setTodayOverride, useIntents } from "@/lib/store";
 
 export default function TodayPage() {
   const intents = useIntents();
+  const { open } = useCaptureSheet();
   const [view, setView] = useState<TodayView>({ active: [], overdue: [] });
   const now = new Date();
 
@@ -43,12 +44,13 @@ export default function TodayPage() {
           title="План на сьогодні з'явиться тут"
           hint="Запиши думки й підтверди розбір — наміри, чий час — сьогодні, зберуться в цей список."
           action={
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={open}
               className="mt-2 rounded-card bg-clay px-5 py-2.5 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)]"
             >
               Записати думки
-            </Link>
+            </button>
           }
         />
       </main>
