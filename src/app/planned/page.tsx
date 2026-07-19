@@ -18,13 +18,16 @@ import { currentContext } from "@/lib/conditions/context";
 import { buildToday } from "@/lib/today";
 import { useIntents } from "@/lib/store";
 import { useCurrentCity } from "@/lib/geo/currentCity";
-import { describeCondition } from "@/lib/format";
 import { addDays, dayStart, isSameLocalDay, nearestWeekday } from "@/lib/dates";
-import type { Condition, Intent, Priority } from "@/lib/types";
+import type { Condition, Intent } from "@/lib/types";
 
 // ── axis switcher (the row of pills) ────────────────────────────────────────
-// Only «Час» is a real axis in this phase. The rest are locked previews — tapping one shows
-// a toast and does nothing else (zero logic behind a locked axis, per the spec).
+// The axes are mutually-exclusive FILTER TABS: tapping one shows a single slice of the waiting
+// field by condition type. Three live axes now — «Час» (time), «Місце» (location/city, real
+// geolocation), and «Інше» (unconditional intents + any not-yet-built condition type). The old
+// locked «Погода»/«Курс»/«Повітря · скоро» chips are folded into the single «Інше» tab.
+type Axis = "time" | "location" | "other";
+
 function ClockIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
@@ -33,6 +36,7 @@ function ClockIcon() {
     </svg>
   );
 }
+// Map pin — the «Місце» axis marker; the SAME glyph the location condition chip uses on cards.
 function PlaceIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
@@ -41,25 +45,21 @@ function PlaceIcon() {
     </svg>
   );
 }
-function WeatherIcon() {
+// «Інше» — a small dots glyph reading as "everything else / more".
+function OtherIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
-      <path d="M17 18a4 4 0 000-8 6 6 0 00-11.3 2A3.5 3.5 0 006 18z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function RateIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
-      <path d="M12 2v20M17 6H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
     </svg>
   );
 }
 
-const LOCKED_AXES: { label: string; icon: () => ReactNode; toast: string }[] = [
-  { label: "Місце", icon: PlaceIcon, toast: "Місце — вмикаємо у Фазі 4" },
-  { label: "Погода", icon: WeatherIcon, toast: "Погода — вмикаємо у Фазі 4" },
-  { label: "Курс", icon: RateIcon, toast: "Курс валют — вмикаємо у Фазі 4" },
+const AXES: { key: Axis; label: string; icon: () => ReactNode }[] = [
+  { key: "time", label: "Час", icon: ClockIcon },
+  { key: "location", label: "Місце", icon: PlaceIcon },
+  { key: "other", label: "Інше", icon: OtherIcon },
 ];
 
 // ── day resolution / labels (display-only, from exported date primitives) ───
@@ -382,45 +382,12 @@ function CalendarLens({
   );
 }
 
-// ── soon card (a recognized non-time condition on a not-yet-enabled axis) ───
-// Never produced by the current parser (location collapses to "none"), so this section stays
-// hidden in practice — but it's built so it renders correctly once a non-time axis exists.
-const DOT: Record<Priority, string> = { high: "bg-clay", medium: "bg-amber", low: "bg-sage" };
-
-function SoonCard({ intent, now }: { intent: Intent; now: Date }) {
-  return (
-    <div className="relative rounded-card border border-line-soft bg-transparent p-4 opacity-80">
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-normal leading-snug break-words text-ink-2">{intent.text}</p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          {/* same unified priority language: dot in the meta row, before the chip */}
-          <span className={`h-2 w-2 flex-none rounded-full ${DOT[intent.priority]}`} aria-hidden />
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-transparent px-2.5 py-1 text-xs font-semibold text-ink-3">
-            {describeCondition(intent.condition, now)}
-            <span className="text-[10px] uppercase tracking-[0.12em] text-ink-3">· скоро</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── section label helper (matches «Сьогодні»'s divider style) ───────────────
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="mb-3 flex items-center gap-2.5 px-1 text-[12px] font-semibold uppercase tracking-[0.13em] text-ink-3">
-      <span>{children}</span>
-      <span className="h-px flex-1 bg-line-soft" />
-    </h2>
-  );
-}
-
 export default function PlannedPage() {
   const intents = useIntents();
   const [waiting, setWaiting] = useState<Intent[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The active filter tab. Mutually exclusive: the screen shows exactly one axis' slice.
+  const [axis, setAxis] = useState<Axis>("time");
   // Same current-city source as «Сьогодні», so a city intent that surfaced there is correctly
   // excluded from the waiting field here (and reappears when you leave that city).
   const city = useCurrentCity();
@@ -446,21 +413,21 @@ export default function PlannedPage() {
     };
   }, [intents, city]);
 
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
-
-  function showToast(message: string) {
-    setToast(message);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2100);
-  }
-
-  // Future time intents (grouped by day) and the reserved non-time bucket.
+  // The three axis slices — one intent belongs to exactly one axis (its condition type), never
+  // duplicated across tabs. «Час» and «Місце» read the waiting field (intents not surfaced today).
+  // «Інше» reads the FULL open set: unconditional ("none") intents always hold today, so they're
+  // never in `waiting` — sourcing them here (and from any future not-yet-built condition type) is
+  // the only way they show on this axis. Consequence: a "none" intent appears on both «Сьогодні»
+  // and «Заплановано»/«Інше» — intended, since «Інше» is the home for conditionless intents.
   const timeWaiting = waiting.filter((i) => i.condition.type === "time");
-  const otherWaiting = waiting.filter((i) => i.condition.type !== "time");
+  const locationWaiting = waiting.filter((i) => i.condition.type === "location");
+  const otherIntents = intents.filter(
+    (i) =>
+      i.status === "open" && i.condition.type !== "time" && i.condition.type !== "location",
+  );
   const dayGroups = groupByDay(timeWaiting, now);
-  const isEmpty = timeWaiting.length === 0 && otherWaiting.length === 0;
+  const isEmpty =
+    timeWaiting.length === 0 && locationWaiting.length === 0 && otherIntents.length === 0;
 
   // Calendar lens: dot map + a resilient selection (drop a stale day if its dot vanished
   // after a re-derive, so the filter can't strand the user on an empty day).
@@ -487,24 +454,27 @@ export default function PlannedPage() {
         </p>
       </header>
 
-      {/* Axis switcher — «Час» active, the rest locked previews. */}
+      {/* Axis filter tabs — mutually exclusive; the active one is filled, others are outlines. */}
       <div className="-mx-5 mb-6 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <span className="inline-flex flex-none items-center gap-1.5 rounded-full border border-ink bg-ink px-3.5 py-2 text-[13px] font-semibold text-white">
-          <ClockIcon />
-          Час
-        </span>
-        {LOCKED_AXES.map((axis) => (
-          <button
-            key={axis.label}
-            type="button"
-            onClick={() => showToast(axis.toast)}
-            className="inline-flex flex-none items-center gap-1.5 rounded-full border border-line bg-transparent px-3.5 py-2 text-[13px] font-semibold text-ink-3 opacity-70"
-          >
-            <axis.icon />
-            {axis.label}
-            <span className="ml-0.5 text-[10px] tracking-wide opacity-80">· скоро</span>
-          </button>
-        ))}
+        {AXES.map(({ key, label, icon: Icon }) => {
+          const active = axis === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setAxis(key)}
+              className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition ${
+                active
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-transparent text-ink-3"
+              }`}
+            >
+              <Icon />
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {isEmpty ? (
@@ -513,100 +483,118 @@ export default function PlannedPage() {
           title="Тут тихо чекають наміри"
           hint="Запиши перший — і він приляже тут до свого часу. Це поле, а не список справ: воно не докоряє."
         />
-      ) : (
-        <>
-          {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри.
-              Згортається за скролом (модель прототипу: морф за порогом прокрутки з гістерезисом). */}
-          {timeWaiting.length > 0 ? (
+      ) : axis === "time" ? (
+        timeWaiting.length === 0 ? (
+          <AxisEmpty>Жоден намір поки не чекає на конкретний час.</AxisEmpty>
+        ) : (
+          <>
+            {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри.
+                Згортається за скролом (модель прототипу: морф за порогом з гістерезисом). */}
             <CalendarLens
               now={now}
               counts={dayCounts}
               selectedKey={activeKey}
               onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
             />
-          ) : null}
 
-          {activeKey ? (
-            /* Обрано день у календарі — список звужено до цієї дати. */
-            <section>
-              <div className="mb-4 flex items-center gap-2.5 px-1 font-display text-sm font-semibold text-ink-2">
-                <span>Обрано {dayLabel(keyToDate(activeKey), now)}</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedKey(null)}
-                  className="text-[12px] font-semibold text-clay underline underline-offset-2"
-                >
-                  показати все
-                </button>
-              </div>
-              <div className="flex flex-col gap-3">
-                {selectedItems.map((intent) => (
-                  <IntentCard
-                    key={intent.id}
-                    text={intent.text}
-                    priority={intent.priority}
-                    condition={intent.condition}
-                    now={now}
-                    state="waiting"
-                  />
-                ))}
-              </div>
-            </section>
-          ) : (
-            <>
-              {/* Секція «Час» — future time intents grouped by day. */}
-              {timeWaiting.length > 0 ? (
-                <section>
-                  <SectionLabel>Час</SectionLabel>
-                  {dayGroups.map((group) => (
-                    <div key={group.key} className="mb-5">
-                      <p className="mb-2.5 px-1 font-display text-sm font-semibold tracking-wide text-ink-2">
-                        {group.label}
-                      </p>
-                      <div className="flex flex-col gap-3">
-                        {group.items.map((intent) => (
-                          <IntentCard
-                            key={intent.id}
-                            text={intent.text}
-                            priority={intent.priority}
-                            condition={intent.condition}
-                            now={now}
-                            state="waiting"
-                          />
-                        ))}
-                      </div>
-                    </div>
+            {activeKey ? (
+              /* Обрано день у календарі — список звужено до цієї дати. */
+              <section>
+                <div className="mb-4 flex items-center gap-2.5 px-1 font-display text-sm font-semibold text-ink-2">
+                  <span>Обрано {dayLabel(keyToDate(activeKey), now)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKey(null)}
+                    className="text-[12px] font-semibold text-clay underline underline-offset-2"
+                  >
+                    показати все
+                  </button>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {selectedItems.map((intent) => (
+                    <IntentCard
+                      key={intent.id}
+                      text={intent.text}
+                      priority={intent.priority}
+                      condition={intent.condition}
+                      now={now}
+                      state="waiting"
+                    />
                   ))}
-                </section>
-              ) : null}
-
-              {/* Секція «Інші умови · скоро» — recognized non-time conditions, axis not yet on. */}
-              {otherWaiting.length > 0 ? (
-                <section className="mt-4">
-                  <SectionLabel>Інші умови · скоро</SectionLabel>
-                  <p className="mb-3 px-1 font-display text-[13px] italic leading-relaxed text-ink-3">
-                    Продукт уже почув ці умови. Виринуть, коли ми ввімкнемо відповідну вісь.
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    {otherWaiting.map((intent) => (
-                      <SoonCard key={intent.id} intent={intent} now={now} />
-                    ))}
+                </div>
+              </section>
+            ) : (
+              <section>
+                {dayGroups.map((group) => (
+                  <div key={group.key} className="mb-5">
+                    <p className="mb-2.5 px-1 font-display text-sm font-semibold tracking-wide text-ink-2">
+                      {group.label}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {group.items.map((intent) => (
+                        <IntentCard
+                          key={intent.id}
+                          text={intent.text}
+                          priority={intent.priority}
+                          condition={intent.condition}
+                          now={now}
+                          state="waiting"
+                        />
+                      ))}
+                    </div>
                   </div>
-                </section>
-              ) : null}
-            </>
-          )}
-        </>
+                ))}
+              </section>
+            )}
+          </>
+        )
+      ) : axis === "location" ? (
+        /* Вісь «Місце» — наміри, чий час настане в певному місті (жива геолокація). Виринають
+           у «Сьогодні», коли ти там; тут тихо чекають, поки ти деінде. */
+        locationWaiting.length === 0 ? (
+          <AxisEmpty>Немає намірів, прив&apos;язаних до місця. Скажи «у Львові…» — і він приляже сюди.</AxisEmpty>
+        ) : (
+          <section className="flex flex-col gap-3">
+            {locationWaiting.map((intent) => (
+              <IntentCard
+                key={intent.id}
+                text={intent.text}
+                priority={intent.priority}
+                condition={intent.condition}
+                now={now}
+                state="waiting"
+              />
+            ))}
+          </section>
+        )
+      ) : (
+        /* Вісь «Інше» — безумовні наміри (та будь-який ще-не-ввімкнений тип умови). */
+        otherIntents.length === 0 ? (
+          <AxisEmpty>Тут зберуться наміри без умови — ті, що можна зробити будь-коли.</AxisEmpty>
+        ) : (
+          <section className="flex flex-col gap-3">
+            {otherIntents.map((intent) => (
+              <IntentCard
+                key={intent.id}
+                text={intent.text}
+                priority={intent.priority}
+                condition={intent.condition}
+                now={now}
+                state="waiting"
+              />
+            ))}
+          </section>
+        )
       )}
-
-      {/* Transient toast for locked axes. */}
-      {toast ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-30 flex justify-center px-6">
-          <span className="rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper shadow-card">
-            {toast}
-          </span>
-        </div>
-      ) : null}
     </main>
+  );
+}
+
+// A gentle per-axis empty line — the axis has no intents yet, but the field is not empty overall.
+function AxisEmpty({ children }: { children: ReactNode }) {
+  return (
+    <p className="px-1 pt-2 font-display text-[15px] italic leading-relaxed text-ink-3">
+      {children}
+    </p>
   );
 }

@@ -42,9 +42,23 @@ function AnytimeIcon() {
   );
 }
 
-// Which mark the condition chip shows: clock only for a named time, arrow otherwise.
+// Location ("city") intents get a map PIN — the SAME marker as the «Місце» axis on «Заплановано»
+// (identical path), so a place condition reads as a place, never as an anytime arrow.
+function PinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M20 10c0 6-8 11-8 11s-8-5-8-11a8 8 0 0116 0z" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+// Which mark the condition chip shows: three distinct marks — clock = time, pin = place,
+// arrow = anytime (unconditional). One icon per condition type, never mixed.
 function ConditionIcon({ condition }: { condition: Condition }) {
-  return condition.type === "time" ? <ClockIcon /> : <AnytimeIcon />;
+  if (condition.type === "time") return <ClockIcon />;
+  if (condition.type === "location") return <PinIcon />;
+  return <AnytimeIcon />;
 }
 
 // The «Сьогодні» active-card affordances (prototype todayCard): a large tap-target
