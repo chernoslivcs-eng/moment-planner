@@ -74,13 +74,30 @@ function normalizeAt(v: unknown): string | null {
   return `${y}-${mo}-${d}T${hh}:${mi}:${ss}`;
 }
 
-// Turns a raw condition into a clean one. Only "time" and "none" are produced by the core.
-// A time condition that carries NO usable time information (no valid `at`, no weekday, no
-// daypart) is NOT fabricated into "сьогодні" — it collapses to an unconditional "none".
-// Anything unsupported (e.g. a reserved "location") with no time info likewise → "none".
+// A city name the model resolved to nominative. We only trust a non-empty string here; the
+// declension work ("Львові" → "Львів") is the model's job (see prompt) — normalize never
+// invents or rewrites a city, it just guards against empty/garbage.
+function normalizeCity(v: unknown): string | null {
+  return toStr(v);
+}
+
+// Turns a raw condition into a clean one. The core produces "time", "location" (city phase)
+// or "none". A time condition that carries NO usable time information (no valid `at`, no
+// weekday, no daypart) is NOT fabricated into "сьогодні" — it collapses to an unconditional
+// "none". A location condition with no usable city likewise degrades to "none" (soft fallback,
+// never stored garbage).
 function normalizeCondition(raw: unknown): Condition {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   if (obj.type === "none") return { type: "none" };
+
+  if (obj.type === "location") {
+    const value = (obj.value && typeof obj.value === "object" ? obj.value : {}) as Record<
+      string,
+      unknown
+    >;
+    const city = normalizeCity(value.city);
+    return city ? { type: "location", value: { city } } : { type: "none" };
+  }
 
   const value = normalizeTimeValue(obj.value);
   return value ? { type: "time", value } : { type: "none" };

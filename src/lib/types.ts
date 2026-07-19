@@ -19,7 +19,17 @@ export interface TimeValue {
   daypart: Daypart | null;
 }
 
-// value for condition.type === "location" (second wave — not built in this step, shape reserved)
+// value for condition.type === "location" — the "city" phase.
+// A location condition is understood by CITY NAME alone: the city as the AI resolved it,
+// normalized to the nominative case ("у Львові" / "до Львова" → "Львів"). No coordinates
+// and no radius here — the city works on name only; geometry belongs to the later phase.
+export interface CityValue {
+  city: string;
+}
+
+// RESERVED for the later point/brand phase (a named place with a geofence: coordinates +
+// radius). NOT produced by the parser in the city phase and intentionally NOT wired into the
+// Condition union yet — kept as the shape that phase will adopt. Do not touch in the city phase.
 export interface LocationValue {
   placeName: string;
   lat: number;
@@ -28,14 +38,17 @@ export interface LocationValue {
 }
 
 // Polymorphic condition. Discriminated union keyed by `type`.
-// Core produces the "time" and "none" variants; "location" is reserved for the next wave.
 //   - "time": relevant when its named moment/day holds.
-//   - "none": UNCONDITIONAL — no named time. A legitimate timeless constant, not a "today"
-//     default. It lives in Today permanently and is never released by the clock; it leaves
-//     only by a human decision (done / manual remove). Carries no value.
+//   - "location": relevant when the user is in the named CITY (city phase → CityValue). Its
+//     checker is position-driven and arrives in the geolocation phase; until then a location
+//     intent simply never surfaces in Today (no checker → holdsToday false) and waits under
+//     «Заплановано».
+//   - "none": UNCONDITIONAL — no named time/place. A legitimate timeless constant, not a
+//     "today" default. It lives in Today permanently and is never released by the clock; it
+//     leaves only by a human decision (done / manual remove). Carries no value.
 export type Condition =
   | { type: "time"; value: TimeValue }
-  | { type: "location"; value: LocationValue }
+  | { type: "location"; value: CityValue }
   | { type: "none" };
 
 export type ConditionType = Condition["type"];

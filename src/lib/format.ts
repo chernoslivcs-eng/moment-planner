@@ -79,5 +79,7 @@ function describeTime(value: TimeValue, now: Date): string {
 export function describeCondition(condition: Condition, now: Date = new Date()): string {
   if (condition.type === "time") return describeTime(condition.value, now);
   if (condition.type === "none") return "Будь-коли"; // unconditional — relevant any time
-  return "Умова"; // reserved types (location) not built in this step
+  // location (city phase): the city name as the model resolved it (nominative). Declension-free
+  // so it reads correctly for any city; the place icon/section already frame it as a place.
+  return condition.value.city;
 }
