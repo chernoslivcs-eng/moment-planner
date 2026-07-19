@@ -196,24 +196,8 @@ function calTitle(mode: CalMode, now: Date): string {
 // useLayoutEffect on the client (measure before paint → no flash); inert no-op on the server.
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-// The current Monday-anchored week (7 cells) — the compact row shown in the sticky strip once
-// the full month scrolls away. Same dayKey/out scheme as buildCells, so dots/selection line up.
-function currentWeekCells(now: Date): Cell[] {
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const mondayOffset = (now.getDay() + 6) % 7;
-  const monday = new Date(year, month, now.getDate() - mondayOffset);
-  const cells: Cell[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    cells.push({ blank: false, day: d.getDate(), key: dayKey(d), out: d.getMonth() !== month });
-  }
-  return cells;
-}
-
-// One grid cell — shared by every calendar surface (month grid, tap-compact, sticky week strip)
-// so dot markers, selection (clay fill), today-highlight and out-of-month dimming stay identical
+// One grid cell — shared by every calendar surface (month grid, compact two-weeks) so dot
+// markers, selection (clay fill), today-highlight and out-of-month dimming stay identical
 // no matter which lens renders it. A day with intents is a tappable filter; a bare day is inert.
 function renderCell(
   c: Cell,
@@ -279,6 +263,10 @@ function renderCell(
 function useScrollCollapseFlag(): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
+    // Intentional: the flag lives in the URL (client-only). Reading it lazily in useState would
+    // diverge from the statically-prerendered (flag-off) HTML and trip a hydration mismatch, so
+    // we render the safe default first, then flip on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOn(new URLSearchParams(window.location.search).get("collapse") === "scroll");
   }, []);
   return on;
@@ -303,11 +291,15 @@ function CalendarLens({
   counts,
   selectedKey,
   onSelect,
+  trigger = "tap",
 }: {
   now: Date;
   counts: Map<string, number>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  // "tap" — the title toggles month ↔ compact (default, works at any list length).
+  // "scroll" — the prototype's model: a scroll-position threshold drives the same morph.
+  trigger?: "tap" | "scroll";
 }) {
   const [mode, setMode] = useState<CalMode>("month");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -319,13 +311,42 @@ function CalendarLens({
   const cells = buildCells(mode, now);
   const title = calTitle(mode, now);
 
-  // The tap captures the "from" height on the OLD DOM, then flips mode; the layout effect
-  // below measures the NEW height and morphs between the two. Ported from the prototype's
-  // buildCalendar (measure → pin → reflow → transition height + cross-fade grid).
-  function toggleMode() {
+  // Capture the "from" height on the OLD DOM, then flip mode; the layout effect below measures
+  // the NEW height and morphs between the two. Ported from the prototype's buildCalendar
+  // (measure → pin → reflow → transition height + cross-fade grid). Shared by tap and scroll.
+  function morphTo(next: CalMode) {
+    if (next === mode) return;
     if (bodyRef.current) fromHeightRef.current = bodyRef.current.offsetHeight;
-    setMode((m) => (m === "month" ? "compact" : "month"));
+    setMode(next);
   }
+  function toggleMode() {
+    morphTo(mode === "month" ? "compact" : "month");
+  }
+
+  // Scroll trigger (prototype parity, lines 1084–1088): window scrollY with hysteresis — collapse
+  // to compact past 90px, re-expand to month above 30px. The 60px dead-band stops flicker at the
+  // boundary. It fires the SAME height-morph as the tap, so space is reclaimed by the calendar
+  // shrinking in place (a one-shot 0.36s animation), NOT by scrolling a tall month out of view —
+  // which is why it works no matter how short the list is. rAF-throttled, passive.
+  useEffect(() => {
+    if (trigger !== "scroll") return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const st = window.scrollY;
+        if (mode === "month" && st > 90) morphTo("compact");
+        else if (mode === "compact" && st < 30) morphTo("month");
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger, mode]);
 
   useIsomorphicLayoutEffect(() => {
     const el = bodyRef.current;
@@ -370,27 +391,39 @@ function CalendarLens({
 
   return (
     <div className="mb-6 px-0.5">
-      {/* Тап-хендл згортання. Праворуч — помітний чип зі станом дії, щоб було ясно,
-          що заголовок тапається (скрол-тригер свідомо не робимо — див. рішення A). */}
-      <button
-        type="button"
-        onClick={toggleMode}
-        aria-expanded={mode === "month"}
-        aria-label={
-          mode === "month" ? "Згорнути календар до двох тижнів" : "Розгорнути календар на місяць"
-        }
-        className="group mb-3 flex w-full items-center justify-between gap-2 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
-      >
-        <span>{title}</span>
-        <span className="inline-flex flex-none items-center gap-1 rounded-full border border-clay/25 bg-clay/10 px-2.5 py-1 text-[12px] font-semibold text-clay transition group-active:scale-95">
-          {mode === "month" ? "згорнути" : "розгорнути"}
-          <ChevronIcon
-            className={`h-3.5 w-3.5 transition-transform duration-300 ${
-              mode === "month" ? "rotate-180" : ""
-            }`}
-          />
-        </span>
-      </button>
+      {trigger === "scroll" ? (
+        // Scroll-driven (prototype): the title is a plain label, dimmed while collapsed
+        // (.cal-collapsed .cal-title{opacity:.75}). Scroll — not a tap — drives the morph.
+        <div
+          className={`mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2 transition-opacity duration-300 ${
+            mode === "compact" ? "opacity-75" : ""
+          }`}
+        >
+          {title}
+        </div>
+      ) : (
+        // Тап-хендл згортання. Праворуч — помітний чип зі станом дії, щоб було ясно,
+        // що заголовок тапається.
+        <button
+          type="button"
+          onClick={toggleMode}
+          aria-expanded={mode === "month"}
+          aria-label={
+            mode === "month" ? "Згорнути календар до двох тижнів" : "Розгорнути календар на місяць"
+          }
+          className="group mb-3 flex w-full items-center justify-between gap-2 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
+        >
+          <span>{title}</span>
+          <span className="inline-flex flex-none items-center gap-1 rounded-full border border-clay/25 bg-clay/10 px-2.5 py-1 text-[12px] font-semibold text-clay transition group-active:scale-95">
+            {mode === "month" ? "згорнути" : "розгорнути"}
+            <ChevronIcon
+              className={`h-3.5 w-3.5 transition-transform duration-300 ${
+                mode === "month" ? "rotate-180" : ""
+              }`}
+            />
+          </span>
+        </button>
+      )}
 
       <div ref={bodyRef}>
         <div className="mb-1.5 grid grid-cols-7 gap-1">
@@ -402,119 +435,6 @@ function CalendarLens({
         </div>
         <div ref={gridRef} className="grid grid-cols-7 gap-1">
           {cells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── sticky collapsing-header calendar (scroll-driven, flag: ?collapse=scroll) ─
-// A TRUE native collapsing header, not a height morph. The full month grid sits in normal
-// flow and scrolls away with the window — buttery, no reflow. A compact current-week strip is
-// `position: sticky; top:0`, pinned over the list; it starts invisible and cross-fades IN as
-// the month scrolls up. Space is reclaimed by SCROLLING PAST the tall month, never by shrinking
-// an above-viewport element — that is what keeps iOS smooth (no scroll-anchor jump, since we
-// never resize content above the viewport). The strip overlaps the month via a measured
-// negative margin so there is no blank gap while it is invisible. Only opacity/pointer-events
-// change at runtime (GPU-composited); the pin itself is pure CSS.
-function StickyCalendarLens({
-  now,
-  counts,
-  selectedKey,
-  onSelect,
-}: {
-  now: Date;
-  counts: Map<string, number>;
-  selectedKey: string | null;
-  onSelect: (key: string) => void;
-}) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const monthRef = useRef<HTMLDivElement>(null);
-  const [stripH, setStripH] = useState(0);
-  const rafRef = useRef<number | null>(null);
-
-  const todayKey = dayKey(now);
-  const monthCells = buildCells("month", now);
-  const weekCells = currentWeekCells(now);
-  const monthTitle = calTitle("month", now);
-
-  // Measure the strip before paint so the month's negative margin overlaps it exactly (no gap,
-  // no one-frame jump). Re-measures if the day (hence layout) changes.
-  useIsomorphicLayoutEffect(() => {
-    if (stripRef.current) setStripH(stripRef.current.offsetHeight);
-  }, [now]);
-
-  // Passive, rAF-throttled scroll → crossfade. progress = how far the month has scrolled above
-  // the pinned strip, normalised over the month's collapsible height. A smoothstep + dead-band
-  // (hysteresis) keeps interactivity from flickering when a finger hovers near the midpoint.
-  useEffect(() => {
-    const strip = stripRef.current;
-    const month = monthRef.current;
-    if (!strip || !month) return;
-
-    const apply = () => {
-      rafRef.current = null;
-      const sh = strip.offsetHeight || 1;
-      const range = Math.max(month.offsetHeight - sh, 1);
-      // month top relative to viewport: === strip top until the strip pins at 0, then goes
-      // negative as the month scrolls up behind it.
-      const monthTop = month.getBoundingClientRect().top;
-      const raw = Math.min(Math.max(-monthTop / range, 0), 1);
-      const p = raw * raw * (3 - 2 * raw); // smoothstep
-      strip.style.opacity = String(p);
-      month.style.opacity = String(1 - p);
-      // hysteresis dead-band: don't hand pointer control over until clearly on one side.
-      strip.style.pointerEvents = p > 0.6 ? "auto" : "none";
-      month.style.pointerEvents = p < 0.4 ? "auto" : "none";
-    };
-    const onScroll = () => {
-      if (rafRef.current != null) return;
-      rafRef.current = requestAnimationFrame(apply);
-    };
-
-    apply(); // set the initial (scrolled-to-top) state
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [stripH]);
-
-  return (
-    <div className="mb-6 px-0.5">
-      {/* Compact current-week strip — pinned at top, cross-fades in as the month scrolls away.
-          -mx-5 px-5 lets its blurred paper background span full-bleed over the page gutter. */}
-      <div
-        ref={stripRef}
-        className="sticky top-0 z-20 -mx-5 border-b border-line-soft bg-paper/95 px-5 pb-2 pt-3 backdrop-blur"
-        style={{ opacity: 0, pointerEvents: "none" }}
-      >
-        <div className="mb-1.5 flex items-center justify-between px-0.5">
-          <span className="font-display text-[13px] font-semibold tracking-wide text-ink-2">
-            {monthTitle}
-          </span>
-          <span className="text-[11px] font-medium tracking-wide text-ink-3">цей тиждень</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {weekCells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
-        </div>
-      </div>
-
-      {/* Full month — normal flow, scrolls away. Negative margin pulls it up to overlap the
-          (initially invisible) strip so there is no blank band at rest. */}
-      <div ref={monthRef} style={{ marginTop: stripH ? -stripH : 0 }}>
-        <div className="mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2">
-          {monthTitle}
-        </div>
-        <div className="mb-1.5 grid grid-cols-7 gap-1">
-          {WEEKDAY_LABELS.map((w) => (
-            <span key={w} className="text-center text-[10px] font-semibold tracking-wide text-ink-3">
-              {w}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {monthCells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
         </div>
       </div>
     </div>
@@ -653,24 +573,16 @@ export default function PlannedPage() {
       ) : (
         <>
           {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри.
-              За замовчуванням — перевірений тап-хендл; ?collapse=scroll вмикає експериментальний
-              collapsing-header по скролу (тап лишається як безпечний фолбек). */}
+              За замовчуванням — перевірений тап-хендл; ?collapse=scroll вмикає скрол-тригер
+              (той самий морф, як у прототипі, лише за порогом прокрутки з гістерезисом). */}
           {timeWaiting.length > 0 ? (
-            scrollCollapse ? (
-              <StickyCalendarLens
-                now={now}
-                counts={dayCounts}
-                selectedKey={activeKey}
-                onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
-              />
-            ) : (
-              <CalendarLens
-                now={now}
-                counts={dayCounts}
-                selectedKey={activeKey}
-                onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
-              />
-            )
+            <CalendarLens
+              now={now}
+              counts={dayCounts}
+              selectedKey={activeKey}
+              onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
+              trigger={scrollCollapse ? "scroll" : "tap"}
+            />
           ) : null}
 
           {activeKey ? (
