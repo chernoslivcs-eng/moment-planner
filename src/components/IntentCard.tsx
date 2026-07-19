@@ -36,6 +36,21 @@ function ClockIcon() {
   );
 }
 
+// Timeless ("none") intents get a NON-clock mark — a downward arrow, per the prototype —
+// so the chip never implies a moment the intent doesn't have. Clock stays time-only.
+function AnytimeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Which mark the condition chip shows: clock only for a named time, arrow otherwise.
+function ConditionIcon({ condition }: { condition: Condition }) {
+  return condition.type === "time" ? <ClockIcon /> : <AnytimeIcon />;
+}
+
 export function IntentCard({
   text,
   priority,
@@ -94,7 +109,7 @@ export function IntentCard({
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-clay/15 bg-clay/10 px-2.5 py-1 text-xs font-semibold text-ink-2">
                 <span className="text-clay">
-                  <ClockIcon />
+                  <ConditionIcon condition={condition} />
                 </span>
                 {describeCondition(condition, now)}
               </span>
