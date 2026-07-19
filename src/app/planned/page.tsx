@@ -62,6 +62,17 @@ const AXES: { key: Axis; label: string; icon: () => ReactNode }[] = [
   { key: "other", label: "Інше", icon: OtherIcon },
 ];
 
+// Empty-state glyph — the SAME linear calendar as the «Заплановано» nav tab, sized to fill the
+// EmptyState's glyph slot (thin 1.2 stroke to match the empty-state family, e.g. «Сьогодні»'s arrow).
+function CalendarGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" aria-hidden>
+      <rect x="4" y="5" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ── day resolution / labels (display-only, from exported date primitives) ───
 function cap(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;
@@ -479,7 +490,7 @@ export default function PlannedPage() {
 
       {isEmpty ? (
         <EmptyState
-          emoji="🗓️"
+          glyph={<CalendarGlyph />}
           title="Тут тихо чекають наміри"
           hint="Запиши перший — і він приляже тут до свого часу. Це поле, а не список справ: воно не докоряє."
         />

@@ -31,6 +31,26 @@ import {
   useCandidates,
 } from "@/lib/store";
 
+// Thin linear glyphs for the Розбір action pills — same stroke family as the rest of the
+// product (condition clock, nav calendar): a check for «Виконано», a clock (the product's
+// «Сьогодні» marker, per the prototype's `condPill('today', I.clock)`) for «В сьогодні».
+function CheckGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ClockGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 type SheetContext = { isOpen: boolean; open: () => void; close: () => void };
 
 const Ctx = createContext<SheetContext | null>(null);
@@ -446,14 +466,16 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
             actions={
               <>
                 <ActionButton onClick={() => commitCandidate(c.cid, "done")}>
-                  ✓ Виконано
+                  <CheckGlyph />
+                  Виконано
                 </ActionButton>
                 <ActionButton
                   tone="accent"
                   active={!!c.pinToday}
                   onClick={() => toggleCandidatePinToday(c.cid)}
                 >
-                  ☀️ В сьогодні
+                  <ClockGlyph />
+                  В сьогодні
                 </ActionButton>
                 <ActionButton tone="danger" onClick={() => removeCandidate(c.cid)}>
                   Відпустити
