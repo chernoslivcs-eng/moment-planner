@@ -1,7 +1,7 @@
 // Never trust the model's output (roadmap §4). Turn a dirty/partial model response into
 // clean, schema-valid ParsedIntent[]: strip markdown, coerce bad fields, drop garbage.
 
-import type { Daypart, ParsedIntent, Priority, TimeValue } from "../types";
+import type { Condition, Daypart, ParsedIntent, Priority, TimeValue } from "../types";
 import { DAYPARTS, PRIORITIES, TIME_KINDS } from "../types";
 
 // Thrown when the response can't be located/parsed as JSON at all (caller shows a friendly error).
@@ -50,7 +50,21 @@ function normalizeAt(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function normalizeTimeValue(raw: unknown, today: Date): TimeValue {
+// Turns a raw condition into a clean one. Only "time" and "none" are produced by the core.
+// A time condition that carries NO usable time information (no valid `at`, no weekday, no
+// daypart) is NOT fabricated into "сьогодні" — it collapses to an unconditional "none".
+// Anything unsupported (e.g. a reserved "location") with no time info likewise → "none".
+function normalizeCondition(raw: unknown): Condition {
+  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  if (obj.type === "none") return { type: "none" };
+
+  const value = normalizeTimeValue(obj.value);
+  return value ? { type: "time", value } : { type: "none" };
+}
+
+// Returns a clean TimeValue, or null when the model named no usable time at all
+// (the caller turns null into an unconditional "none" — never a fabricated today).
+function normalizeTimeValue(raw: unknown): TimeValue | null {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
 
   let kind = (TIME_KINDS as readonly string[]).includes(obj.kind as string)
@@ -60,39 +74,26 @@ function normalizeTimeValue(raw: unknown, today: Date): TimeValue {
   const weekday = toStr(obj.weekday);
   const daypart = normalizeDaypart(obj.daypart);
 
-  // Repair contradictions: a dated kind with no valid `at` and no daypart falls back to
-  // "сьогодні" so the intent still surfaces today rather than becoming invisible.
+  // A dated kind with no valid `at` degrades to whatever softer time info exists;
+  // if there is none, there is no time at all → null (caller makes it "none").
   if ((kind === "datetime" || kind === "date") && !at) {
     if (daypart) {
       kind = "daypart";
     } else if (weekday) {
       kind = "weekday";
     } else {
-      return {
-        kind: "date",
-        at: startOfDayISO(today),
-        weekday: null,
-        daypart: null,
-      };
+      return null;
     }
   }
-  if (kind === "weekday" && !weekday) {
-    return { kind: "date", at: startOfDayISO(today), weekday: null, daypart: null };
-  }
-  if (kind === "daypart" && !daypart) {
-    return { kind: "date", at: startOfDayISO(today), weekday: null, daypart: null };
-  }
+  if (kind === "weekday" && !weekday) return null;
+  if (kind === "daypart" && !daypart) return null;
 
   return { kind, at, weekday, daypart };
 }
 
-function startOfDayISO(today: Date): string {
-  const d = new Date(today);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-}
-
 export interface NormalizeOptions {
+  // Retained for API stability; time normalization no longer needs a "today" anchor
+  // (relative dates are resolved by the model against the date passed in the prompt).
   today?: Date;
 }
 
@@ -100,9 +101,8 @@ export interface NormalizeOptions {
 // Throws ParseFormatError only when a string can't be located/parsed as a JSON array.
 export function normalizeParseResponse(
   raw: unknown,
-  opts: NormalizeOptions = {},
+  _opts: NormalizeOptions = {},
 ): ParsedIntent[] {
-  const today = opts.today ?? new Date();
   const value = typeof raw === "string" ? extractJsonArray(raw) : raw;
   if (!Array.isArray(value)) return [];
 
@@ -113,14 +113,11 @@ export function normalizeParseResponse(
     const text = toStr(obj.text);
     if (!text) continue; // no text → nothing to keep; drop it
 
-    const rawCondition = (obj.condition ?? {}) as Record<string, unknown>;
-    // Core: condition.type is always coerced to "time".
-    const timeVal = normalizeTimeValue(rawCondition.value, today);
-
     out.push({
       text,
       priority: normalizePriority(obj.priority),
-      condition: { type: "time", value: timeVal },
+      // Core produces "time" (a named moment) or "none" (unconditional). No today-default.
+      condition: normalizeCondition(obj.condition),
     });
   }
   return out;

@@ -54,14 +54,15 @@ describe("normalizeParseResponse", () => {
     expect(out.map((i) => i.text)).toEqual(["лишок"]);
   });
 
-  it("repairs a dated kind with no valid `at` by defaulting to today", () => {
+  it("a dated kind with no usable time info becomes unconditional (no fabricated today)", () => {
+    // Behavior change: previously this fabricated {kind:"date", at:today}. The core no
+    // longer invents a "today" default — with no valid `at`, no weekday, no daypart there
+    // is no time at all, so the condition collapses to "none".
     const raw = [
       { text: "x", condition: { type: "time", value: { kind: "date", at: "не-дата" } } },
     ];
     const out = normalizeParseResponse(raw, { today: TODAY });
-    const v = out[0].condition.type === "time" ? out[0].condition.value : null;
-    expect(v?.kind).toBe("date");
-    expect(v?.at).toBe(new Date(2026, 0, 5, 0, 0, 0, 0).toISOString());
+    expect(out[0].condition.type).toBe("none");
   });
 
   it("nullifies an invalid `at` on a weekday kind and keeps the weekday", () => {
@@ -78,8 +79,28 @@ describe("normalizeParseResponse", () => {
     expect(v?.at).toBeNull();
   });
 
-  it("always coerces condition.type to time for the core", () => {
+  it("an unsupported (reserved location) condition with no time collapses to none", () => {
+    // Behavior change: previously coerced to a fabricated "time" today. The core now emits
+    // only "time" (named moment) or "none" (unconditional); an unsupported type carrying no
+    // usable time info becomes "none" rather than a fake today.
     const raw = [{ text: "у Львові кава", condition: { type: "location", value: {} } }];
+    const out = normalizeParseResponse(raw, { today: TODAY });
+    expect(out[0].condition.type).toBe("none");
+  });
+
+  it("passes through an explicit none condition", () => {
+    const raw = [{ text: "почитати книжку", condition: { type: "none" } }];
+    const out = normalizeParseResponse(raw, { today: TODAY });
+    expect(out[0].condition.type).toBe("none");
+  });
+
+  it("keeps a named time as a time condition", () => {
+    const raw = [
+      {
+        text: "купити квитки",
+        condition: { type: "time", value: { kind: "date", at: "2026-01-05T00:00:00" } },
+      },
+    ];
     const out = normalizeParseResponse(raw, { today: TODAY });
     expect(out[0].condition.type).toBe("time");
   });

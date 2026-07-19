@@ -4,9 +4,11 @@
 import type { Condition } from "../types";
 import type { ConditionChecker } from "./checker";
 import { timeChecker } from "./time";
+import { noneChecker } from "./none";
 
 const registry = new Map<Condition["type"], ConditionChecker>([
   ["time", timeChecker as ConditionChecker],
+  ["none", noneChecker as ConditionChecker],
   // ["location", locationChecker], // second wave
 ]);
 

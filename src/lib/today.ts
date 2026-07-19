@@ -40,6 +40,9 @@ export async function buildToday(
       continue;
     }
 
+    // Unconditional ("none") intents flow through the same registry-driven checks: their
+    // checker is never overdue and always holdsToday, so they land in `active` every day
+    // and never in the overdue bucket — a permanent Today resident until a human acts.
     if (await isOverdue(intent.condition, ctx)) {
       overdue.push(intent);
       continue;

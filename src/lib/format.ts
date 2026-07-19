@@ -66,5 +66,6 @@ function describeTime(value: TimeValue, now: Date): string {
 
 export function describeCondition(condition: Condition, now: Date = new Date()): string {
   if (condition.type === "time") return describeTime(condition.value, now);
-  return "Умова"; // other types are not built in this step
+  if (condition.type === "none") return "Будь-коли"; // unconditional — relevant any time
+  return "Умова"; // reserved types (location) not built in this step
 }

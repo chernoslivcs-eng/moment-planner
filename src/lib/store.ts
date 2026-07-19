@@ -86,7 +86,9 @@ function newId(prefix: string): string {
 // drop duplicates before they ever reach a collection (fixes duplicate build-up in Today).
 function signature(x: { text: string; condition: ParsedIntent["condition"] }): string {
   const text = x.text.trim().toLowerCase().replace(/\s+/g, " ");
-  return `${text}||${x.condition.type}||${JSON.stringify(x.condition.value)}`;
+  // "none" carries no value; other variants do. Guard the access so the union stays sound.
+  const value = "value" in x.condition ? x.condition.value : null;
+  return `${text}||${x.condition.type}||${JSON.stringify(value)}`;
 }
 
 // ---- Candidates (Inbox review buffer) --------------------------------------

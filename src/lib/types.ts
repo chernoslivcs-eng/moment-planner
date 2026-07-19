@@ -28,10 +28,15 @@ export interface LocationValue {
 }
 
 // Polymorphic condition. Discriminated union keyed by `type`.
-// Core only produces/handles the "time" variant; "location" is reserved for the next wave.
+// Core produces the "time" and "none" variants; "location" is reserved for the next wave.
+//   - "time": relevant when its named moment/day holds.
+//   - "none": UNCONDITIONAL — no named time. A legitimate timeless constant, not a "today"
+//     default. It lives in Today permanently and is never released by the clock; it leaves
+//     only by a human decision (done / manual remove). Carries no value.
 export type Condition =
   | { type: "time"; value: TimeValue }
-  | { type: "location"; value: LocationValue };
+  | { type: "location"; value: LocationValue }
+  | { type: "none" };
 
 export type ConditionType = Condition["type"];
 
