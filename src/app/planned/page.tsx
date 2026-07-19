@@ -116,9 +116,10 @@ function groupByDay(items: Intent[], now: Date): DayGroup[] {
 // A quiet "lens over the list", NOT a second calendar. It reads the SAME day resolution
 // (timeGroupDate) that already groups the «Час» section — no new date logic, no model
 // fields. Days that carry a future time intent get a dot and become tappable; a tap filters
-// the list below to that day. The title is a tap-handle: it toggles month ↔ two-weeks with a
-// soft height morph + grid cross-fade. The trigger is a discrete TAP, not scroll, so the
-// animation never fights a scrolling finger (jank-free on mobile).
+// the list below to that day. Collapse is scroll-driven (prototype model): a scrollY threshold
+// with hysteresis morphs month ↔ two-weeks in place (soft height morph + grid cross-fade). The
+// morph is a one-shot animation fired by a debounced threshold, not coupled per-pixel to the
+// finger, so it stays jank-free on mobile.
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"] as const;
 
 // Local calendar-day key (YYYY-MM-DD) from local Y/M/D — never toISOString (that is UTC and
@@ -257,49 +258,16 @@ function renderCell(
   );
 }
 
-// Reads the ?collapse=scroll flag once on the client. Default (flag absent) keeps the proven
-// tap-handle calendar; the flag opts into the experimental scroll-collapse lens so it can be
-// tried on a real device via the preview URL without disturbing the safe default.
-function useScrollCollapseFlag(): boolean {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    // Intentional: the flag lives in the URL (client-only). Reading it lazily in useState would
-    // diverge from the statically-prerendered (flag-off) HTML and trip a hydration mismatch, so
-    // we render the safe default first, then flip on mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOn(new URLSearchParams(window.location.search).get("collapse") === "scroll");
-  }, []);
-  return on;
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
-      <path
-        d="M6 9l6 6 6-6"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function CalendarLens({
   now,
   counts,
   selectedKey,
   onSelect,
-  trigger = "tap",
 }: {
   now: Date;
   counts: Map<string, number>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
-  // "tap" — the title toggles month ↔ compact (default, works at any list length).
-  // "scroll" — the prototype's model: a scroll-position threshold drives the same morph.
-  trigger?: "tap" | "scroll";
 }) {
   const [mode, setMode] = useState<CalMode>("month");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -313,23 +281,19 @@ function CalendarLens({
 
   // Capture the "from" height on the OLD DOM, then flip mode; the layout effect below measures
   // the NEW height and morphs between the two. Ported from the prototype's buildCalendar
-  // (measure → pin → reflow → transition height + cross-fade grid). Shared by tap and scroll.
+  // (measure → pin → reflow → transition height + cross-fade grid).
   function morphTo(next: CalMode) {
     if (next === mode) return;
     if (bodyRef.current) fromHeightRef.current = bodyRef.current.offsetHeight;
     setMode(next);
   }
-  function toggleMode() {
-    morphTo(mode === "month" ? "compact" : "month");
-  }
 
-  // Scroll trigger (prototype parity, lines 1084–1088): window scrollY with hysteresis — collapse
-  // to compact past 90px, re-expand to month above 30px. The 60px dead-band stops flicker at the
-  // boundary. It fires the SAME height-morph as the tap, so space is reclaimed by the calendar
+  // Scroll drives the collapse (prototype parity, lines 1084–1088): window scrollY with hysteresis
+  // — collapse to compact past 90px, re-expand to month above 30px. The 60px dead-band stops
+  // flicker at the boundary. It fires the height-morph, so space is reclaimed by the calendar
   // shrinking in place (a one-shot 0.36s animation), NOT by scrolling a tall month out of view —
   // which is why it works no matter how short the list is. rAF-throttled, passive.
   useEffect(() => {
-    if (trigger !== "scroll") return;
     let raf = 0;
     const onScroll = () => {
       if (raf) return;
@@ -346,7 +310,7 @@ function CalendarLens({
       if (raf) cancelAnimationFrame(raf);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trigger, mode]);
+  }, [mode]);
 
   useIsomorphicLayoutEffect(() => {
     const el = bodyRef.current;
@@ -391,39 +355,15 @@ function CalendarLens({
 
   return (
     <div className="mb-6 px-0.5">
-      {trigger === "scroll" ? (
-        // Scroll-driven (prototype): the title is a plain label, dimmed while collapsed
-        // (.cal-collapsed .cal-title{opacity:.75}). Scroll — not a tap — drives the morph.
-        <div
-          className={`mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2 transition-opacity duration-300 ${
-            mode === "compact" ? "opacity-75" : ""
-          }`}
-        >
-          {title}
-        </div>
-      ) : (
-        // Тап-хендл згортання. Праворуч — помітний чип зі станом дії, щоб було ясно,
-        // що заголовок тапається.
-        <button
-          type="button"
-          onClick={toggleMode}
-          aria-expanded={mode === "month"}
-          aria-label={
-            mode === "month" ? "Згорнути календар до двох тижнів" : "Розгорнути календар на місяць"
-          }
-          className="group mb-3 flex w-full items-center justify-between gap-2 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
-        >
-          <span>{title}</span>
-          <span className="inline-flex flex-none items-center gap-1 rounded-full border border-clay/25 bg-clay/10 px-2.5 py-1 text-[12px] font-semibold text-clay transition group-active:scale-95">
-            {mode === "month" ? "згорнути" : "розгорнути"}
-            <ChevronIcon
-              className={`h-3.5 w-3.5 transition-transform duration-300 ${
-                mode === "month" ? "rotate-180" : ""
-              }`}
-            />
-          </span>
-        </button>
-      )}
+      {/* Scroll-driven (prototype): the title is a plain label, dimmed while collapsed
+          (.cal-collapsed .cal-title{opacity:.75}). Scroll — not a tap — drives the morph. */}
+      <div
+        className={`mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2 transition-opacity duration-300 ${
+          mode === "compact" ? "opacity-75" : ""
+        }`}
+      >
+        {title}
+      </div>
 
       <div ref={bodyRef}>
         <div className="mb-1.5 grid grid-cols-7 gap-1">
@@ -480,7 +420,6 @@ export default function PlannedPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollCollapse = useScrollCollapseFlag();
   const now = new Date();
 
   // Re-derive on the same triggers as «Сьогодні» so the split stays consistent.
@@ -573,15 +512,13 @@ export default function PlannedPage() {
       ) : (
         <>
           {/* Календарна лінза — під осями, над списком. Тільки коли є датовані наміри.
-              За замовчуванням — перевірений тап-хендл; ?collapse=scroll вмикає скрол-тригер
-              (той самий морф, як у прототипі, лише за порогом прокрутки з гістерезисом). */}
+              Згортається за скролом (модель прототипу: морф за порогом прокрутки з гістерезисом). */}
           {timeWaiting.length > 0 ? (
             <CalendarLens
               now={now}
               counts={dayCounts}
               selectedKey={activeKey}
               onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
-              trigger={scrollCollapse ? "scroll" : "tap"}
             />
           ) : null}
 
