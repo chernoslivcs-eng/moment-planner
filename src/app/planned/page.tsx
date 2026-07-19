@@ -11,7 +11,7 @@
 // Read-only: reuses buildToday to know what today already claims, then arranges the rest.
 // Touches no lib/store/parse/today logic — display-only, grouping done from exported helpers.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IntentCard } from "@/components/IntentCard";
 import { EmptyState } from "@/components/EmptyState";
 import { currentContext } from "@/lib/conditions/context";
@@ -112,11 +112,13 @@ function groupByDay(items: Intent[], now: Date): DayGroup[] {
   return groups;
 }
 
-// ── calendar lens (static month grid, Monday-first) ────────────────────────
+// ── calendar lens (collapsible month grid, Monday-first) ───────────────────
 // A quiet "lens over the list", NOT a second calendar. It reads the SAME day resolution
 // (timeGroupDate) that already groups the «Час» section — no new date logic, no model
 // fields. Days that carry a future time intent get a dot and become tappable; a tap filters
-// the list below to that day. Collapsing month→two-weeks is a later step (3B-2).
+// the list below to that day. The title is a tap-handle: it toggles month ↔ two-weeks with a
+// soft height morph + grid cross-fade. The trigger is a discrete TAP, not scroll, so the
+// animation never fights a scrolling finger (jank-free on mobile).
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"] as const;
 
 // Local calendar-day key (YYYY-MM-DD) from local Y/M/D — never toISOString (that is UTC and
@@ -142,7 +144,71 @@ function datedCounts(items: Intent[], now: Date): Map<string, number> {
   return counts;
 }
 
-type Cell = { blank: true } | { blank: false; day: number; key: string };
+type Cell = { blank: true } | { blank: false; day: number; key: string; out: boolean };
+
+type CalMode = "month" | "compact";
+
+// Grid cells for a mode. month → leading blanks + every day of the month. compact → 14 days
+// from Monday of the current week (days spilling into an adjacent month are flagged `out`,
+// rendered dimmer). Same dayKey scheme as the dot map, so dots/selection line up in both modes.
+function buildCells(mode: CalMode, now: Date): Cell[] {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  if (mode === "month") {
+    const offset = (new Date(year, month, 1).getDay() + 6) % 7; // week starts Monday
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Cell[] = [];
+    for (let i = 0; i < offset; i++) cells.push({ blank: true });
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ blank: false, day: d, key: dayKey(new Date(year, month, d)), out: false });
+    }
+    return cells;
+  }
+  const mondayOffset = (now.getDay() + 6) % 7;
+  const monday = new Date(year, month, now.getDate() - mondayOffset);
+  const cells: Cell[] = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    cells.push({ blank: false, day: d.getDate(), key: dayKey(d), out: d.getMonth() !== month });
+  }
+  return cells;
+}
+
+function calTitle(mode: CalMode, now: Date): string {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  if (mode === "month") {
+    return cap(
+      new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" }).format(
+        new Date(year, month, 1),
+      ),
+    );
+  }
+  const mondayOffset = (now.getDay() + 6) % 7;
+  const monday = new Date(year, month, now.getDate() - mondayOffset);
+  const end = new Date(monday);
+  end.setDate(monday.getDate() + 13);
+  const fmt = new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "short" });
+  return `${fmt.format(monday)} – ${fmt.format(end)} · два тижні`;
+}
+
+// useLayoutEffect on the client (measure before paint → no flash); inert no-op on the server.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M6 9l6 6 6-6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function CalendarLens({
   now,
@@ -155,79 +221,144 @@ function CalendarLens({
   selectedKey: string | null;
   onSelect: (key: string) => void;
 }) {
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const monthStart = new Date(year, month, 1);
-  const offset = (monthStart.getDay() + 6) % 7; // leading blanks so week starts Monday
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayKey = dayKey(now);
-  const title = cap(
-    new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" }).format(monthStart),
-  );
+  const [mode, setMode] = useState<CalMode>("month");
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const fromHeightRef = useRef<number | null>(null);
+  const animTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const cells: Cell[] = [];
-  for (let i = 0; i < offset; i++) cells.push({ blank: true });
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ blank: false, day: d, key: dayKey(new Date(year, month, d)) });
+  const todayKey = dayKey(now);
+  const cells = buildCells(mode, now);
+  const title = calTitle(mode, now);
+
+  // The tap captures the "from" height on the OLD DOM, then flips mode; the layout effect
+  // below measures the NEW height and morphs between the two. Ported from the prototype's
+  // buildCalendar (measure → pin → reflow → transition height + cross-fade grid).
+  function toggleMode() {
+    if (bodyRef.current) fromHeightRef.current = bodyRef.current.offsetHeight;
+    setMode((m) => (m === "month" ? "compact" : "month"));
   }
+
+  useIsomorphicLayoutEffect(() => {
+    const el = bodyRef.current;
+    const from = fromHeightRef.current;
+    if (!el || from == null) return; // first mount: nothing to morph from → static
+    fromHeightRef.current = null;
+
+    const to = el.offsetHeight;
+    if (to === from) return;
+
+    const grid = gridRef.current;
+    el.style.height = `${from}px`;
+    el.style.overflow = "hidden";
+    if (grid) grid.style.opacity = "0";
+    void el.offsetHeight; // force reflow so the browser registers the start height
+    el.style.transition = "height 0.36s cubic-bezier(0.32, 0.72, 0, 1)";
+    el.style.height = `${to}px`;
+    if (grid) {
+      grid.style.transition = "opacity 0.32s ease 0.06s";
+      requestAnimationFrame(() => {
+        grid.style.opacity = "1";
+      });
+    }
+    if (animTimer.current) clearTimeout(animTimer.current);
+    animTimer.current = setTimeout(() => {
+      el.style.height = "";
+      el.style.overflow = "";
+      el.style.transition = "";
+      if (grid) {
+        grid.style.opacity = "";
+        grid.style.transition = "";
+      }
+    }, 400);
+  }, [mode]);
+
+  useEffect(
+    () => () => {
+      if (animTimer.current) clearTimeout(animTimer.current);
+    },
+    [],
+  );
 
   return (
     <div className="mb-6 px-0.5">
-      <p className="mb-3 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2">
-        {title}
-      </p>
-      <div className="mb-1.5 grid grid-cols-7 gap-1">
-        {WEEKDAY_LABELS.map((w) => (
-          <span key={w} className="text-center text-[10px] font-semibold tracking-wide text-ink-3">
-            {w}
-          </span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((c, i) => {
-          if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
-          const isToday = c.key === todayKey;
-          const isSelected = c.key === selectedKey;
+      <button
+        type="button"
+        onClick={toggleMode}
+        aria-expanded={mode === "month"}
+        aria-label={
+          mode === "month" ? "Згорнути календар до двох тижнів" : "Розгорнути календар на місяць"
+        }
+        className="mb-3 flex w-full items-center gap-1.5 px-0.5 font-display text-[15px] font-semibold tracking-wide text-ink-2"
+      >
+        <span>{title}</span>
+        <ChevronIcon
+          className={`h-4 w-4 flex-none text-ink-3 transition-transform duration-300 ${
+            mode === "month" ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-          if (counts.has(c.key)) {
+      <div ref={bodyRef}>
+        <div className="mb-1.5 grid grid-cols-7 gap-1">
+          {WEEKDAY_LABELS.map((w) => (
+            <span key={w} className="text-center text-[10px] font-semibold tracking-wide text-ink-3">
+              {w}
+            </span>
+          ))}
+        </div>
+        <div ref={gridRef} className="grid grid-cols-7 gap-1">
+          {cells.map((c, i) => {
+            if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
+            const isToday = c.key === todayKey;
+            const isSelected = c.key === selectedKey;
+
+            if (counts.has(c.key)) {
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={`${c.day} — є наміри`}
+                  onClick={() => onSelect(c.key)}
+                  className={`relative flex aspect-square items-center justify-center rounded-xl text-sm font-semibold transition active:scale-[0.94] ${
+                    isSelected
+                      ? "bg-clay text-white"
+                      : isToday
+                        ? "bg-surface text-ink shadow-card"
+                        : c.out
+                          ? "text-ink-2"
+                          : "text-ink"
+                  }`}
+                >
+                  {c.day}
+                  <span
+                    className={`absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full ${
+                      isSelected ? "bg-white" : "bg-clay"
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              );
+            }
+
+            // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
             return (
-              <button
+              <span
                 key={c.key}
-                type="button"
-                aria-pressed={isSelected}
-                aria-label={`${c.day} — є наміри`}
-                onClick={() => onSelect(c.key)}
-                className={`relative flex aspect-square items-center justify-center rounded-xl text-sm font-semibold transition active:scale-[0.94] ${
-                  isSelected
-                    ? "bg-clay text-white"
-                    : isToday
-                      ? "bg-surface text-ink shadow-card"
-                      : "text-ink"
+                className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
+                  isToday
+                    ? "bg-surface font-bold text-ink shadow-card"
+                    : c.out
+                      ? "font-medium text-ink-3/60"
+                      : "font-medium text-ink-3/90"
                 }`}
               >
                 {c.day}
-                <span
-                  className={`absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full ${
-                    isSelected ? "bg-white" : "bg-clay"
-                  }`}
-                  aria-hidden
-                />
-              </button>
+              </span>
             );
-          }
-
-          // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
-          return (
-            <span
-              key={c.key}
-              className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
-                isToday ? "bg-surface font-bold text-ink shadow-card" : "font-medium text-ink-3/90"
-              }`}
-            >
-              {c.day}
-            </span>
-          );
-        })}
+          })}
+        </div>
       </div>
     </div>
   );
