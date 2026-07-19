@@ -3,26 +3,22 @@ import type { Condition, Priority } from "@/lib/types";
 import { describeCondition, priorityLabel } from "@/lib/format";
 
 // Visual state of a card — the three-state language from the prototype.
-//   today   — warm surface, soft shadow, clay accent bar (alive, ready to act)
+// State encodes WEIGHT only (not priority):
+//   today   — warm surface, soft shadow (alive, surfaced)
 //   waiting — transparent, thin border, hushed (asleep in the waiting field)
 //   gone    — dashed border, dimmed, italic caption (released without reproach)
 export type IntentCardState = "today" | "waiting" | "gone";
 
-// Priority reads as a small dot / accent bar, never a loud badge.
+// Priority reads as one small colour dot — the SAME language in every card, sitting in the
+// meta row just before the condition chip (never a leading mark, never a left edge bar).
 const DOT: Record<Priority, string> = {
   high: "bg-clay",
   medium: "bg-amber",
   low: "bg-sage",
 };
 
-const BAR: Record<Priority, string> = {
-  high: "bg-clay",
-  medium: "bg-clay-soft",
-  low: "bg-sage",
-};
-
 const CONTAINER: Record<IntentCardState, string> = {
-  today: "border border-transparent bg-surface shadow-card",
+  today: "border border-line-soft bg-surface shadow-card",
   waiting: "border border-line-soft bg-transparent",
   gone: "border border-dashed border-line bg-transparent opacity-60",
 };
@@ -71,21 +67,12 @@ export function IntentCard({
 
   return (
     <div className={`relative rounded-card p-4 transition ${CONTAINER[state]}`}>
-      {/* today: clay accent bar, tinted by priority */}
-      {isToday ? (
-        <span
-          className={`absolute top-3.5 bottom-3.5 left-0 w-[3px] rounded-full ${BAR[priority]}`}
-          aria-hidden
-        />
-      ) : null}
-
       <div className="flex gap-3">
-        {/* waiting / gone: priority dot */}
-        {!isToday ? (
+        {/* gone keeps a leading dot beside its italic caption (it has no meta chip);
+            today & waiting instead carry priority in the meta row, below. */}
+        {isGone ? (
           <span
-            className={`mt-1.5 h-2.5 w-2.5 flex-none rounded-full ${DOT[priority]} ${
-              isGone ? "opacity-60" : ""
-            }`}
+            className={`mt-1.5 h-2.5 w-2.5 flex-none rounded-full opacity-60 ${DOT[priority]}`}
             aria-hidden
           />
         ) : null}
@@ -98,7 +85,7 @@ export function IntentCard({
           >
             {text}
           </p>
-          {/* priority conveyed visually by dot/bar; kept for assistive tech */}
+          {/* priority conveyed visually by the meta-row dot; kept for assistive tech */}
           <span className="sr-only">{priorityLabel(priority)}</span>
 
           {isGone ? (
@@ -107,6 +94,8 @@ export function IntentCard({
             </span>
           ) : (
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {/* unified priority language: one colour dot, immediately before the chip */}
+              <span className={`h-2 w-2 flex-none rounded-full ${DOT[priority]}`} aria-hidden />
               <span className="inline-flex items-center gap-1.5 rounded-full border border-clay/15 bg-clay/10 px-2.5 py-1 text-xs font-semibold text-ink-2">
                 <span className="text-clay">
                   <ConditionIcon condition={condition} />

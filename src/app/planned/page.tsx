@@ -241,16 +241,15 @@ const DOT: Record<Priority, string> = { high: "bg-clay", medium: "bg-amber", low
 function SoonCard({ intent, now }: { intent: Intent; now: Date }) {
   return (
     <div className="relative rounded-card border border-line-soft bg-transparent p-4 opacity-80">
-      <div className="flex gap-3">
-        <span className={`mt-1.5 h-2.5 w-2.5 flex-none rounded-full opacity-60 ${DOT[intent.priority]}`} aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-normal leading-snug break-words text-ink-2">{intent.text}</p>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-transparent px-2.5 py-1 text-xs font-semibold text-ink-3">
-              {describeCondition(intent.condition, now)}
-              <span className="text-[10px] uppercase tracking-[0.12em] text-ink-3">· скоро</span>
-            </span>
-          </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-normal leading-snug break-words text-ink-2">{intent.text}</p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          {/* same unified priority language: dot in the meta row, before the chip */}
+          <span className={`h-2 w-2 flex-none rounded-full ${DOT[intent.priority]}`} aria-hidden />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-transparent px-2.5 py-1 text-xs font-semibold text-ink-3">
+            {describeCondition(intent.condition, now)}
+            <span className="text-[10px] uppercase tracking-[0.12em] text-ink-3">· скоро</span>
+          </span>
         </div>
       </div>
     </div>
