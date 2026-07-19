@@ -5,7 +5,8 @@ import { describeCondition, priorityLabel } from "@/lib/format";
 // Visual state of a card — the three-state language from the prototype.
 // State encodes WEIGHT only (not priority):
 //   today   — warm surface, soft shadow (alive, surfaced)
-//   waiting — transparent, thin border, hushed (asleep in the waiting field)
+//   waiting — IDENTICAL to today by deliberate design decision: a waiting intent is a full,
+//             present card (warm surface + shadow + full-weight text), not a hushed one
 //   gone    — dashed border, dimmed, italic caption (released without reproach)
 export type IntentCardState = "today" | "waiting" | "gone";
 
@@ -19,7 +20,8 @@ const DOT: Record<Priority, string> = {
 
 const CONTAINER: Record<IntentCardState, string> = {
   today: "border border-line-soft bg-surface shadow-card",
-  waiting: "border border-line-soft bg-transparent",
+  // waiting is deliberately IDENTICAL to today — a surfaced, present card, not a hushed one.
+  waiting: "border border-line-soft bg-surface shadow-card",
   gone: "border border-dashed border-line bg-transparent opacity-60",
 };
 
@@ -108,7 +110,6 @@ export function IntentCard({
   onDismiss?: () => void;
   done?: boolean;
 }) {
-  const isToday = state === "today";
   const isGone = state === "gone";
 
   return (
@@ -157,7 +158,7 @@ export function IntentCard({
         <div className="min-w-0 flex-1">
           <p
             className={`text-[15px] leading-snug break-words ${
-              isToday ? "font-medium text-ink" : "font-normal text-ink-2"
+              isGone ? "font-normal text-ink-2" : "font-medium text-ink"
             } ${done ? "text-ink-3 line-through" : ""} ${onDismiss ? "pr-8" : ""}`}
           >
             {text}
