@@ -59,3 +59,24 @@ body::before {
     var(--color-paper);
   pointer-events: none;
 }
+
+/* Voice-capture equalizer bars (ported from the prototype `.eq`) — the "product is
+   hearing you" cue while speech recognition is active. Per-bar delay is set inline. */
+@keyframes mp-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.mp-eq-bar {
+  width: 3px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--color-clay);
+  transform-origin: bottom;
+  animation: mp-eq 0.85s ease-in-out infinite;
+}

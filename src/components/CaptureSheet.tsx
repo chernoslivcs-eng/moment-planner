@@ -8,11 +8,14 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { IntentCard } from "@/components/IntentCard";
 import { ActionButton } from "@/components/ActionButton";
@@ -97,7 +100,7 @@ function CaptureSheet({ isOpen, close }: { isOpen: boolean; close: () => void })
         <div className="mx-auto mt-3 mb-1 h-1 w-9 flex-none rounded-full bg-line" aria-hidden />
         <div className="overflow-y-auto px-5 pt-2 pb-8">
           {step === "capture" ? (
-            <CaptureStep onParsed={() => setStep("review")} />
+            <CaptureStep active={isOpen} onParsed={() => setStep("review")} />
           ) : (
             <ReviewStep onBack={() => setStep("capture")} onDone={close} />
           )}
@@ -123,15 +126,172 @@ function MicIcon() {
   );
 }
 
-function CaptureStep({ onParsed }: { onParsed: () => void }) {
+// ── Voice input: progressive enhancement over the text field ──────────────────
+// Voice is an UPGRADE, never a replacement. The Web Speech API (webkit-prefixed on
+// Chromium) is not in lib.dom's typings, so we declare the minimal surface we use.
+// Everything below is feature-detected at runtime; where the API is absent (iOS
+// Safari, and Chrome-on-iOS which is WebKit under the hood) the mic is hidden and
+// the text field remains the sole, always-working path.
+type SpeechAlt = { transcript: string };
+type SpeechResult = { isFinal: boolean; readonly length: number; [index: number]: SpeechAlt };
+type SpeechResultList = { readonly length: number; [index: number]: SpeechResult };
+type SpeechResultEvent = { resultIndex: number; results: SpeechResultList };
+type SpeechErrEvent = { error: string };
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onresult: ((e: SpeechResultEvent) => void) | null;
+  onerror: ((e: SpeechErrEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+// The one place we probe support. Returns the constructor or null — never throws on SSR.
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+type VoiceCapture = {
+  supported: boolean;
+  listening: boolean;
+  error: string | null;
+  toggle: () => void;
+  stop: () => void;
+};
+
+// Drives recognition and streams the transcript INTO the same capture field. Recognized
+// speech simply fills the textarea; from there it follows the identical «Розібрати» path.
+function useVoiceCapture(
+  setText: Dispatch<SetStateAction<string>>,
+  textRef: { current: string },
+): VoiceCapture {
+  // Detect on mount (client-only) so the server-rendered HTML — which never shows the mic —
+  // matches first paint and no hydration mismatch fires. We flip support on after mount.
+  const [supported, setSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalRef = useRef(""); // finalized transcript for this session
+  const baseRef = useRef(""); // field text that was already there when recording began
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSupported(getSpeechRecognitionCtor() != null);
+  }, []);
+
+  const stop = useCallback(() => {
+    const rec = recRef.current;
+    if (rec) {
+      rec.onresult = rec.onerror = rec.onend = rec.onstart = null;
+      try {
+        rec.stop();
+      } catch {
+        /* already stopped */
+      }
+      recRef.current = null;
+    }
+    setListening(false);
+  }, []);
+
+  const start = useCallback(() => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor || recRef.current) return;
+    const rec = new Ctor();
+    rec.lang = "uk-UA";
+    rec.continuous = true;
+    rec.interimResults = true;
+    finalRef.current = "";
+    baseRef.current = textRef.current.trimEnd() ? `${textRef.current.trimEnd()} ` : "";
+
+    rec.onstart = () => {
+      setError(null);
+      setListening(true);
+    };
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const chunk = res[0]?.transcript ?? "";
+        if (res.isFinal) finalRef.current += chunk;
+        else interim += chunk;
+      }
+      const spoken = `${finalRef.current}${interim}`.replace(/\s+/g, " ").trimStart();
+      setText(baseRef.current + spoken);
+    };
+    rec.onerror = (ev) => {
+      // Permission refused → fall back to text with a gentle, non-blocking hint.
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        setError("Немає доступу до мікрофона — просто впиши текст нижче.");
+      }
+      // Any other error (no-speech, aborted, network) just ends the session quietly.
+    };
+    rec.onend = () => {
+      recRef.current = null;
+      setListening(false);
+    };
+
+    recRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      stop();
+    }
+  }, [setText, textRef, stop]);
+
+  const toggle = useCallback(() => {
+    if (recRef.current) stop();
+    else start();
+  }, [start, stop]);
+
+  // Always release the mic when this step unmounts (parse success, back to review, etc.).
+  useEffect(() => () => stop(), [stop]);
+
+  return { supported, listening, error, toggle, stop };
+}
+
+// Seven-bar equalizer — the prototype's "the product is hearing you" cue. Purely decorative.
+function Equalizer() {
+  const delays = [0, 0.12, 0.24, 0.36, 0.2, 0.3, 0.08];
+  return (
+    <span className="flex h-[22px] flex-none items-end gap-[3px]" aria-hidden>
+      {delays.map((d, i) => (
+        <span key={i} className="mp-eq-bar" style={{ animationDelay: `${d}s` }} />
+      ))}
+    </span>
+  );
+}
+
+function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => void }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep the latest field text reachable from the voice session without re-creating it.
+  const textRef = useRef(text);
+  textRef.current = text;
+  const voice = useVoiceCapture(setText, textRef);
+
+  // Closing the sheet keeps this step mounted (it only slides off-screen), so stop the mic
+  // explicitly when it goes inactive — never leave recognition running behind a closed sheet.
+  useEffect(() => {
+    if (!active) voice.stop();
+  }, [active, voice]);
 
   const canParse = text.trim().length >= 2 && !loading;
 
   async function handleParse() {
     if (!canParse) return;
+    voice.stop();
     setLoading(true);
     setError(null);
     try {
@@ -169,20 +329,38 @@ function CaptureStep({ onParsed }: { onParsed: () => void }) {
           rows={5}
           className="w-full resize-none bg-transparent font-display text-[19px] leading-relaxed text-ink outline-none placeholder:italic placeholder:text-ink-3"
         />
-        <div className="mt-3 flex items-center gap-3">
-          {/* Voice is a later step — the control is shown but not yet active. */}
-          <button
-            type="button"
-            disabled
-            aria-label="Голос — незабаром"
-            className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-line bg-surface text-clay shadow-card disabled:opacity-70"
-          >
-            <MicIcon />
-          </button>
-          <p className="font-display text-[12.5px] italic leading-snug text-ink-3">
-            Голос — незабаром. Поки що текст: постав приклад або впиши свій потік.
+        {voice.supported ? (
+          // Web Speech is live (Chromium desktop): active mic + equalizer + live hint.
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={voice.toggle}
+              aria-pressed={voice.listening}
+              aria-label={voice.listening ? "Зупинити запис" : "Записати голосом"}
+              className={`flex h-12 w-12 flex-none items-center justify-center rounded-full border shadow-card transition active:scale-95 ${
+                voice.listening
+                  ? "animate-pulse border-clay bg-clay text-white"
+                  : "border-line bg-surface text-clay"
+              }`}
+            >
+              <MicIcon />
+            </button>
+            {voice.listening ? <Equalizer /> : null}
+            <p className="font-display text-[12.5px] italic leading-snug text-ink-3">
+              {voice.error
+                ? voice.error
+                : voice.listening
+                  ? "Слухаю… говори; тапни ще раз, щоб зупинити."
+                  : "Тапни мікрофон і говори — або впиши текст."}
+            </p>
+          </div>
+        ) : (
+          // No Web Speech API (iOS Safari, Chrome-on-iOS = WebKit): hide the mic entirely —
+          // no broken control, no error. Text stays the always-available path.
+          <p className="mt-3 font-display text-[12.5px] italic leading-snug text-ink-3">
+            Постав приклад або впиши свій потік.
           </p>
-        </div>
+        )}
       </div>
 
       {error ? (
