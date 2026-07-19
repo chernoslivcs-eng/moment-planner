@@ -2,7 +2,7 @@
 
 // Capture → Розбір as a bottom sheet (Step 2 navigation shell).
 // The sheet is a *presentation wrapper*: it reuses the exact same logic that the
-// old /  and /inbox routes used (parseText, addCandidates, useCandidates,
+// old /  and /inbox routes used (parseText, replaceCandidates, useCandidates,
 // commitAllCandidates, …). Only the composition changes — two in-sheet steps
 // instead of two route pages. No parsing/storage behaviour is altered.
 
@@ -20,10 +20,10 @@ import { ParseError, parseText } from "@/lib/api";
 import { EXAMPLE_BRAINDUMP } from "@/lib/example";
 import { pluralizeIntents } from "@/lib/format";
 import {
-  addCandidates,
   commitAllCandidates,
   commitCandidate,
   removeCandidate,
+  replaceCandidates,
   toggleCandidatePinToday,
   useCandidates,
 } from "@/lib/store";
@@ -140,7 +140,9 @@ function CaptureStep({ onParsed }: { onParsed: () => void }) {
         setError("Не вдалося виділити жодного наміру. Спробуй сформулювати конкретніше.");
         return;
       }
-      addCandidates(intents);
+      // A fresh parse REPLACES the review buffer (clears any stale, unconfirmed
+      // candidates from an earlier parse) so near-duplicate fragments can't pile up.
+      replaceCandidates(intents);
       setText("");
       onParsed();
     } catch (e) {

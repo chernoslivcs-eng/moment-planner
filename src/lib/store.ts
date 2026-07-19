@@ -93,10 +93,14 @@ function signature(x: { text: string; condition: ParsedIntent["condition"] }): s
 
 // ---- Candidates (Inbox review buffer) --------------------------------------
 
-export function addCandidates(parsed: ParsedIntent[]): void {
-  // Skip anything already sitting in the review buffer, so re-parsing the same
-  // text (or parsing again before confirming) can't stack the same items twice.
-  const seen = new Set(candidates.map(signature));
+// Replace the entire review buffer with a fresh parse. Every new brain-dump starts from
+// a clean slate: any previous, still-unconfirmed candidates are discarded, so re-parsing
+// the same text — or parsing a second stream before confirming the first — can't stack
+// near-duplicate fragments (e.g. the whole «подзвонити мамі й привітати її» plus a later
+// fragment «подзвонити мамі», which carry different signatures and both survive dedup).
+// Duplicates WITHIN this one batch are still collapsed by signature.
+export function replaceCandidates(parsed: ParsedIntent[]): void {
+  const seen = new Set<string>();
   const next: Candidate[] = [];
   for (const p of parsed) {
     const sig = signature(p);
@@ -104,8 +108,7 @@ export function addCandidates(parsed: ParsedIntent[]): void {
     seen.add(sig);
     next.push({ ...p, cid: newId("c") });
   }
-  if (next.length === 0) return;
-  candidates = [...next, ...candidates];
+  candidates = next;
   persistCandidates();
   emit();
 }
