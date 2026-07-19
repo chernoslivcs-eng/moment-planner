@@ -98,6 +98,7 @@ export function IntentCard({
   state = "today",
   onComplete,
   onDismiss,
+  dismissLabel = "Прибрати з сьогодні",
   done = false,
 }: {
   text: string;
@@ -108,6 +109,9 @@ export function IntentCard({
   state?: IntentCardState;
   onComplete?: () => void;
   onDismiss?: () => void;
+  // Accessible label / tooltip for the corner ✕. Defaults to the «Сьогодні» meaning
+  // (drop from today); the Розбір gate overrides it (remove from the current review).
+  dismissLabel?: string;
   done?: boolean;
 }) {
   const isGone = state === "gone";
@@ -123,8 +127,8 @@ export function IntentCard({
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Прибрати з сьогодні"
-          title="прибрати з сьогодні"
+          aria-label={dismissLabel}
+          title={dismissLabel.toLowerCase()}
           className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-line-soft bg-paper text-ink-3 transition active:scale-[0.88]"
         >
           <CloseIcon />

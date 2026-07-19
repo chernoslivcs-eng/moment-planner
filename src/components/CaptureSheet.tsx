@@ -18,38 +18,15 @@ import {
   type SetStateAction,
 } from "react";
 import { IntentCard } from "@/components/IntentCard";
-import { ActionButton } from "@/components/ActionButton";
 import { ParseError, parseText } from "@/lib/api";
 import { EXAMPLE_BRAINDUMP } from "@/lib/example";
 import { pluralizeIntents } from "@/lib/format";
 import {
   commitAllCandidates,
-  commitCandidate,
   removeCandidate,
   replaceCandidates,
-  toggleCandidatePinToday,
   useCandidates,
 } from "@/lib/store";
-
-// Thin linear glyphs for the Розбір action pills — same stroke family as the rest of the
-// product (condition clock, nav calendar): a check for «Виконано», a clock (the product's
-// «Сьогодні» marker, per the prototype's `condPill('today', I.clock)`) for «В сьогодні».
-function CheckGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
-      <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ClockGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 type SheetContext = { isOpen: boolean; open: () => void; close: () => void };
 
@@ -451,7 +428,7 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
     <>
       <h2 className="mt-1 font-display text-[23px] font-semibold text-ink">Ось як я почув</h2>
       <p className="mt-1 mb-4 text-[13.5px] leading-relaxed text-ink-2">
-        Перевір кожен намір до збереження. Познач у сьогодні, виконане чи відпусти.
+        Перевір кожен намір до збереження. Зайве — прибери хрестиком, решту підтвердь нижче.
       </p>
 
       <div className="flex flex-col gap-3">
@@ -463,25 +440,11 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
             condition={c.condition}
             now={now}
             state="today"
-            actions={
-              <>
-                <ActionButton onClick={() => commitCandidate(c.cid, "done")}>
-                  <CheckGlyph />
-                  Виконано
-                </ActionButton>
-                <ActionButton
-                  tone="accent"
-                  active={!!c.pinToday}
-                  onClick={() => toggleCandidatePinToday(c.cid)}
-                >
-                  <ClockGlyph />
-                  В сьогодні
-                </ActionButton>
-                <ActionButton tone="danger" onClick={() => removeCandidate(c.cid)}>
-                  Відпустити
-                </ActionButton>
-              </>
-            }
+            // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
+            // wrongly-heard intent from this review via the corner ✕. Disposition actions
+            // («Виконано / В сьогодні / Відпустити») belong to a SAVED intent on «Сьогодні», not here.
+            onDismiss={() => removeCandidate(c.cid)}
+            dismissLabel="Прибрати з розбору"
           />
         ))}
       </div>
