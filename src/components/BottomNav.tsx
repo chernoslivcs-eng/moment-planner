@@ -47,8 +47,18 @@ export function BottomNav() {
   const { open } = useCaptureSheet();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 backdrop-blur">
-      <div className="relative mx-auto flex max-w-md">
+    // The nav wrapper is inert; only the control row re-enables pointer events. This lets the
+    // decorative fade sit ABOVE scrolling cards without ever swallowing their taps.
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30">
+      {/* Bottom fade — ported from the prototype `.nav` gradient. Content dissolves softly
+          under the navigation instead of meeting a hard border+plate. It is purely decorative
+          and MUST stay pointer-events-none so taps pass through to the cards beneath it. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(to_top,var(--color-paper)_62%,transparent)]"
+      />
+
+      <div className="pointer-events-auto relative mx-auto flex max-w-md">
         {/* left tab */}
         <NavTab tab={TABS[0]} active={pathname === TABS[0].href} />
 
