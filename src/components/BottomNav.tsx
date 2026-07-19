@@ -4,13 +4,34 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCaptureSheet } from "@/components/CaptureSheet";
 
+// Tab icons — the same thin linear family as the rest of the product, ported verbatim
+// from the prototype nav: «Сьогодні» = a clock, «Заплановано» = a calendar. stroke uses
+// currentColor so the tab's active/idle colour drives the icon.
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[23px] w-[23px]" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[23px] w-[23px]" aria-hidden>
+      <rect x="4" y="5" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // Step 2 shell: two destination tabs with a floating record button (FAB) centered
 // between them. The FAB opens the Capture bottom sheet — it is *not* a route, so it
 // stays reachable from both screens. The old third «Розбір» tab is gone; review now
 // lives inside the sheet.
 const TABS = [
-  { href: "/today", label: "Сьогодні", emoji: "☀️" },
-  { href: "/planned", label: "Заплановано", emoji: "🗓️" },
+  { href: "/today", label: "Сьогодні", icon: <ClockIcon /> },
+  { href: "/planned", label: "Заплановано", icon: <CalendarIcon /> },
 ] as const;
 
 function PlusIcon() {
@@ -37,7 +58,7 @@ export function BottomNav() {
             type="button"
             onClick={open}
             aria-label="Записати думки"
-            className="-mt-7 flex h-16 w-16 items-center justify-center rounded-full bg-clay text-white shadow-[0_10px_28px_rgba(180,100,63,0.42)] transition active:scale-95"
+            className="-mt-7 flex h-16 w-16 items-center justify-center rounded-full border-4 border-paper bg-clay text-white shadow-[0_10px_28px_rgba(180,100,63,0.42)] transition active:scale-95"
           >
             <PlusIcon />
           </button>
@@ -64,9 +85,7 @@ function NavTab({
         active ? "text-clay" : "text-ink-3"
       }`}
     >
-      <span className="text-lg" aria-hidden>
-        {tab.emoji}
-      </span>
+      {tab.icon}
       {tab.label}
     </Link>
   );
