@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Manrope, Spectral } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Body text — Manrope. Cyrillic subset is mandatory (Ukrainian UI).
+const manrope = Manrope({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-manrope",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// Display serif — Spectral. Used for headings and warm italic captions.
+const spectral = Spectral({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-spectral",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,10 +33,10 @@ export default function RootLayout({
   return (
     <html
       lang="uk"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${spectral.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col pb-20">{children}</div>
+        <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
         <BottomNav />
       </body>
     </html>

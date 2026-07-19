@@ -29,7 +29,7 @@ export default function InboxPage() {
           action={
             <Link
               href="/"
-              className="mt-2 rounded-full bg-stone-900 px-5 py-2.5 text-sm font-medium text-white"
+              className="mt-2 rounded-card bg-clay px-5 py-2.5 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)]"
             >
               До запису
             </Link>
@@ -41,9 +41,11 @@ export default function InboxPage() {
 
   return (
     <main className="flex flex-1 flex-col px-5 pt-10">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold text-stone-900">Розбір</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <header className="mb-5 pt-2">
+        <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-ink">
+          Розбір
+        </h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
           Ось як я зрозумів кожен намір. Перевір до збереження — виправити можна одним рухом.
         </p>
       </header>
@@ -56,6 +58,7 @@ export default function InboxPage() {
             priority={c.priority}
             condition={c.condition}
             now={now}
+            state="today"
             actions={
               <>
                 <ActionButton onClick={() => commitCandidate(c.cid, "done")}>
@@ -84,7 +87,7 @@ export default function InboxPage() {
             commitAllCandidates();
             router.push("/today");
           }}
-          className="flex h-12 w-full items-center justify-center rounded-full bg-stone-900 px-6 text-[15px] font-medium text-white shadow-lg transition active:scale-[0.99]"
+          className="flex h-12 w-full items-center justify-center rounded-card bg-clay px-6 text-[15px] font-semibold text-white shadow-lift transition active:scale-[0.99]"
         >
           Підтвердити {candidates.length} {pluralizeIntents(candidates.length)}
         </button>

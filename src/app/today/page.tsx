@@ -45,7 +45,7 @@ export default function TodayPage() {
           action={
             <Link
               href="/"
-              className="mt-2 rounded-full bg-stone-900 px-5 py-2.5 text-sm font-medium text-white"
+              className="mt-2 rounded-card bg-clay px-5 py-2.5 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)]"
             >
               Записати думки
             </Link>
@@ -57,9 +57,14 @@ export default function TodayPage() {
 
   return (
     <main className="flex flex-1 flex-col px-5 pt-10">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold text-stone-900">Сьогодні</h1>
-        <p className="mt-1 text-sm text-stone-500">Твій план на день.</p>
+      <header className="mb-5 pt-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-3">
+          План на дію
+        </p>
+        <h1 className="mt-2 font-display text-[33px] font-semibold leading-[1.05] tracking-tight text-ink">
+          Сьогодні
+        </h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-2">Твій план на день.</p>
       </header>
 
       <div className="flex flex-col gap-3">
@@ -70,6 +75,7 @@ export default function TodayPage() {
             priority={intent.priority}
             condition={intent.condition}
             now={now}
+            state="today"
             actions={
               <>
                 <ActionButton onClick={() => setIntentStatus(intent.id, "done")}>
@@ -92,8 +98,9 @@ export default function TodayPage() {
 
       {view.overdue.length > 0 ? (
         <section className="mt-8">
-          <h2 className="mb-2 text-sm font-medium text-stone-400">
-            Момент, здається, минув
+          <h2 className="mb-3 flex items-center gap-2.5 px-1 text-[12px] font-semibold uppercase tracking-[0.13em] text-ink-3">
+            <span>Момент, здається, минув</span>
+            <span className="h-px flex-1 bg-line-soft" />
           </h2>
           <div className="flex flex-col gap-3">
             {view.overdue.map((intent) => (
@@ -103,7 +110,7 @@ export default function TodayPage() {
                 priority={intent.priority}
                 condition={intent.condition}
                 now={now}
-                muted
+                state="gone"
                 actions={
                   <>
                     <ActionButton

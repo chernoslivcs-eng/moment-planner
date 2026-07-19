@@ -1,19 +1,46 @@
 @import "tailwindcss";
 
-:root {
-  --background: #faf7f2; /* warm off-white */
-  --foreground: #292524;
-}
+/* ── Design tokens ported from the approved prototype (moment-planner-prototype.html) ──
+   Palette, radii, shadows and fonts only. No behavioural change. */
+@theme {
+  /* surfaces */
+  --color-paper: #f4eee1;
+  --color-surface: #fbf8f0;
+  --color-sink: #ece4d3;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* ink */
+  --color-ink: #2e2a22;
+  --color-ink-2: #6e6656;
+  --color-ink-3: #a49b87;
+
+  /* lines */
+  --color-line: #e4dac6;
+  --color-line-soft: #ede5d5;
+
+  /* accents */
+  --color-clay: #b4643f; /* active / today / high priority */
+  --color-clay-soft: #d89a78;
+  --color-amber: #be923b; /* medium priority */
+  --color-sage: #7f8b6a; /* low priority / calm */
+
+  /* radii */
+  --radius-card: 18px;
+  --radius-soft: 13px;
+
+  /* shadows */
+  --shadow-card: 0 2px 14px rgba(60, 48, 26, 0.07), 0 1px 3px rgba(60, 48, 26, 0.05);
+  --shadow-lift: 0 8px 26px rgba(60, 48, 26, 0.14), 0 2px 6px rgba(60, 48, 26, 0.08);
+
+  /* type — Manrope (body) + Spectral (display serif), wired up via next/font */
+  --font-sans: var(--font-manrope), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-spectral), Georgia, "Times New Roman", serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, #faf5ea 0%, transparent 60%),
+    var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

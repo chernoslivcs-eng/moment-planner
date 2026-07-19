@@ -40,12 +40,14 @@ export default function CapturePage() {
 
   return (
     <main className="flex flex-1 flex-col px-5 pt-10">
-      <header className="mb-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-stone-400">
+      <header className="mb-6 pt-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-3">
           Moment Planner
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-stone-900">Що в голові?</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="mt-2 font-display text-[33px] font-semibold leading-[1.05] tracking-tight text-ink">
+          Що в голові?
+        </h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
           Пиши все підряд, потоком. Розберу на окремі наміри.
         </p>
       </header>
@@ -55,11 +57,11 @@ export default function CapturePage() {
         onChange={(e) => setText(e.target.value)}
         placeholder="Напр.: до п'ятниці купити квитки, завтра зранку подзвонити мамі…"
         rows={7}
-        className="w-full resize-none rounded-2xl border border-stone-200 bg-white p-4 text-[15px] leading-relaxed text-stone-900 shadow-sm outline-none placeholder:text-stone-400 focus:border-stone-400"
+        className="w-full resize-none rounded-card border border-line bg-surface p-4 font-display text-[19px] leading-relaxed text-ink shadow-card outline-none placeholder:italic placeholder:text-ink-3 focus:border-clay-soft"
       />
 
       {error ? (
-        <div className="mt-3 flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+        <div className="mt-3 flex items-start gap-2 rounded-soft border border-clay/25 bg-clay/8 p-3 text-sm text-ink-2">
           <span aria-hidden>⚠️</span>
           <div className="flex-1">
             <p>{error}</p>
@@ -67,7 +69,7 @@ export default function CapturePage() {
               type="button"
               onClick={handleParse}
               disabled={!canParse}
-              className="mt-2 font-medium underline underline-offset-2 disabled:opacity-50"
+              className="mt-2 font-semibold text-clay underline underline-offset-2 disabled:opacity-50"
             >
               Спробувати ще раз
             </button>
@@ -80,7 +82,7 @@ export default function CapturePage() {
           type="button"
           onClick={handleParse}
           disabled={!canParse}
-          className="flex h-12 items-center justify-center rounded-full bg-stone-900 px-6 text-[15px] font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
+          className="flex h-12 items-center justify-center rounded-card bg-clay px-6 text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)] transition active:scale-[0.99] disabled:opacity-40"
         >
           {loading ? "Розбираю…" : "Розібрати"}
         </button>
@@ -91,7 +93,7 @@ export default function CapturePage() {
             setError(null);
           }}
           disabled={loading}
-          className="flex h-12 items-center justify-center rounded-full border border-stone-300 px-6 text-[15px] font-medium text-stone-700 transition active:scale-[0.99] disabled:opacity-40"
+          className="flex h-12 items-center justify-center rounded-card border border-line px-6 text-[15px] font-semibold text-ink-2 transition active:scale-[0.99] disabled:opacity-40"
         >
           Спробувати приклад
         </button>

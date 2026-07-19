@@ -11,15 +11,16 @@ export function ActionButton({
   tone?: "neutral" | "danger" | "accent";
   active?: boolean;
 }) {
-  const base = "rounded-full px-3 py-1.5 text-xs font-medium transition active:scale-[0.98]";
+  const base =
+    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97]";
   const styles =
     tone === "danger"
-      ? "bg-stone-100 text-stone-500 hover:bg-stone-200"
+      ? "border-line-soft bg-transparent text-ink-3 hover:bg-surface"
       : tone === "accent"
         ? active
-          ? "bg-amber-500 text-white"
-          : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-        : "bg-stone-100 text-stone-700 hover:bg-stone-200";
+          ? "border-clay bg-clay text-white"
+          : "border-line bg-transparent text-ink-2 hover:bg-surface"
+        : "border-line bg-transparent text-ink-2 hover:bg-surface";
   return (
     <button type="button" onClick={onClick} className={`${base} ${styles}`}>
       {children}

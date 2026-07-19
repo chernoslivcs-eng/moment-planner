@@ -15,7 +15,7 @@ export function BottomNav() {
   const candidates = useCandidates();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white/95 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-md">
         {TABS.map((tab) => {
           const active = pathname === tab.href;
@@ -25,7 +25,7 @@ export function BottomNav() {
               key={tab.href}
               href={tab.href}
               className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition ${
-                active ? "text-stone-900" : "text-stone-400"
+                active ? "text-clay" : "text-ink-3"
               }`}
             >
               <span className="text-lg" aria-hidden>
@@ -33,7 +33,7 @@ export function BottomNav() {
               </span>
               {tab.label}
               {showBadge ? (
-                <span className="absolute right-[22%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                <span className="absolute right-[22%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
                   {candidates.length}
                 </span>
               ) : null}
