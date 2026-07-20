@@ -54,7 +54,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     // усі три заголовки присутні
     const ready = screen.getByRole("region", { name: "Готове до дії" });
     const anytime = screen.getByRole("region", { name: "Будь-коли" });
-    const passed = screen.getByRole("region", { name: "Минуло" });
+    const passed = screen.getByRole("region", { name: "Прострочено" });
 
     // моментний намір — під «Готове до дії», не під «Будь-коли»
     within(ready).getByText("подзвонити мамі");
@@ -97,7 +97,23 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     );
     expect(screen.getByRole("region", { name: "Готове до дії" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Будь-коли" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Минуло" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Прострочено" })).not.toBeInTheDocument();
+  });
+
+  it("картка простроченого має «Виконано», «Відпустити» і «Повернути в сьогодні»", () => {
+    render(
+      <TodaySections
+        now={NOW}
+        view={view({ overdue: [intent({ id: "o1", text: "здати звіт", condition: TIME })] })}
+      />,
+    );
+    const passed = screen.getByRole("region", { name: "Прострочено" });
+    // рівний вибір: виконати АБО відпустити — обидві дії присутні
+    expect(within(passed).getByRole("button", { name: "Виконано" })).toBeInTheDocument();
+    expect(within(passed).getByRole("button", { name: "Відпустити" })).toBeInTheDocument();
+    expect(
+      within(passed).getByRole("button", { name: "Повернути в сьогодні" }),
+    ).toBeInTheDocument();
   });
 
   it("лише безумовні → показана тільки «Будь-коли»", () => {
@@ -111,6 +127,6 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     );
     expect(screen.getByRole("region", { name: "Будь-коли" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Готове до дії" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Минуло" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Прострочено" })).not.toBeInTheDocument();
   });
 });

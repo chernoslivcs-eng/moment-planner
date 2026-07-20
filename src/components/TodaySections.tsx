@@ -102,7 +102,7 @@ export function TodaySections({ view, now }: { view: TodayView; now: Date }) {
       ) : null}
 
       {view.overdue.length > 0 ? (
-        <Section title="Минуло" count={view.overdue.length}>
+        <Section title="Прострочено" count={view.overdue.length}>
           {view.overdue.map((intent) => (
             <IntentCard
               key={intent.id}
@@ -113,8 +113,14 @@ export function TodaySections({ view, now }: { view: TodayView; now: Date }) {
               state="gone"
               actions={
                 <>
+                  {/* Прострочене — живе-невиконане: виконати АБО відпустити, дві РІВНІ дії
+                      без візуального тиску (обидві neutral). «Повернути в сьогодні» —
+                      тихіша третя дія, не гучніша за вибір. */}
+                  <ActionButton tone="neutral" onClick={() => setIntentStatus(intent.id, "done")}>
+                    Виконано
+                  </ActionButton>
                   <ActionButton
-                    tone="danger"
+                    tone="neutral"
                     onClick={() => setIntentStatus(intent.id, "released")}
                   >
                     Відпустити
