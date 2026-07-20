@@ -69,6 +69,10 @@ export function IntentEditor({
   );
   const [recurring, setRecurring] = useState(intent.recurring);
   const [duration, setDuration] = useState<number | null>(intent.duration);
+  // Whether the human touched any condition control. Until they do, the stored condition is left
+  // untouched (the patch omits `condition`/`recurring`) — so a `daypart`/`weekday` intent the
+  // editor can't represent is never silently rewritten to a concrete date on a no-op save.
+  const [condTouched, setCondTouched] = useState(false);
 
   const isLocation = condKey === "location";
 
@@ -100,10 +104,13 @@ export function IntentEditor({
     onSave({
       text: text.trim(),
       priority,
-      condition: buildCondition(),
-      // Recurrence is meaningful only for a place (Крок 2). For time/unconditional it is inert,
-      // so we force it false — switching a recurring geo intent to time drops the repeat.
-      recurring: isLocation ? recurring : false,
+      // Only rewrite the condition when the human actually touched a condition control. Leaving
+      // it out keeps `daypart`/`weekday` (which the editor cannot represent) intact — «відкрив і
+      // зберіг, не чіпаючи умову» must not degrade it to a concrete date. When touched, recurrence
+      // rides along: meaningful only for a place (Крок 2), forced false for time/unconditional.
+      ...(condTouched
+        ? { condition: buildCondition(), recurring: isLocation ? recurring : false }
+        : {}),
       duration,
     });
   }
@@ -111,7 +118,10 @@ export function IntentEditor({
   const condPill = (key: CondKey, label: string) => (
     <button
       type="button"
-      onClick={() => setCondKey(key)}
+      onClick={() => {
+        setCondKey(key);
+        setCondTouched(true);
+      }}
       aria-pressed={condKey === key}
       className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition active:scale-[0.97] ${
         condKey === key
@@ -190,14 +200,20 @@ export function IntentEditor({
               type="date"
               aria-label="Дата"
               value={customDate}
-              onChange={(e) => setCustomDate(e.target.value)}
+              onChange={(e) => {
+                setCustomDate(e.target.value);
+                setCondTouched(true);
+              }}
               className="rounded-soft border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
             />
             <input
               type="time"
               aria-label="Час"
               value={customTime}
-              onChange={(e) => setCustomTime(e.target.value)}
+              onChange={(e) => {
+                setCustomTime(e.target.value);
+                setCondTouched(true);
+              }}
               className="rounded-soft border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
             />
             <span className="text-xs text-ink-3">необовʼязково — можна лише день</span>
@@ -209,7 +225,10 @@ export function IntentEditor({
             <input
               aria-label="Місто"
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={(e) => {
+                setCity(e.target.value);
+                setCondTouched(true);
+              }}
               placeholder="напр. Львів"
               autoComplete="off"
               className="w-full rounded-soft border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink outline-none placeholder:text-ink-3"
@@ -220,7 +239,10 @@ export function IntentEditor({
               role="switch"
               aria-checked={recurring}
               aria-label="Повторювати щоразу"
-              onClick={() => setRecurring((r) => !r)}
+              onClick={() => {
+                setRecurring((r) => !r);
+                setCondTouched(true);
+              }}
               className="flex w-full items-center justify-between rounded-soft border border-line bg-surface px-3.5 py-2.5 text-left"
             >
               <span className="text-[14px] font-medium text-ink-2">Повторювати щоразу в цьому місті</span>

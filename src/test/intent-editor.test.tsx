@@ -20,6 +20,14 @@ const TIME_TODAY: Condition = {
   type: "time",
   value: { kind: "date", at: "2026-07-20T00:00:00", weekday: null, daypart: null },
 };
+const DAYPART_EVENING: Condition = {
+  type: "time",
+  value: { kind: "daypart", at: null, weekday: null, daypart: "evening" },
+};
+const WEEKDAY_FRIDAY: Condition = {
+  type: "time",
+  value: { kind: "weekday", at: null, weekday: "п'ятниця", daypart: null },
+};
 
 function base(over: Partial<EditableIntent> = {}): EditableIntent {
   return {
@@ -154,6 +162,42 @@ describe("IntentEditor — жива умова", () => {
     fireEvent.click(screen.getByRole("button", { name: "без умови" }));
     fireEvent.click(screen.getByRole("button", { name: "Готово" }));
     expect(onSave.mock.calls[0][0].condition).toEqual({ type: "none" });
+  });
+});
+
+describe("IntentEditor — умову НЕ чіпали → зберігається ціла (daypart/weekday)", () => {
+  it("daypart «ввечері» переживає збереження без зміни умови", () => {
+    const { onSave } = renderEditor({ condition: DAYPART_EVENING });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("weekday «п'ятниця» переживає збереження без зміни умови (не стрибає на сьогодні)", () => {
+    const { onSave } = renderEditor({ condition: WEEKDAY_FRIDAY });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("правка лише тексту не чіпає умову daypart", () => {
+    const { onSave } = renderEditor({ condition: DAYPART_EVENING, text: "зарядка" });
+    fireEvent.change(screen.getByRole("textbox", { name: /текст/i }), {
+      target: { value: "довга зарядка" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ text: "довга зарядка" });
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("ТОРКНУВСЯ умови (daypart → «завтра») → нова умова застосовується", () => {
+    const { onSave } = renderEditor({ condition: DAYPART_EVENING });
+    fireEvent.click(screen.getByRole("button", { name: "завтра" }));
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    const cond = onSave.mock.calls[0][0].condition as Condition;
+    expect(cond.type).toBe("time");
+    if (cond.type === "time") {
+      expect(cond.value.kind).toBe("date");
+      expect(cond.value.at).toContain("2026-07-21");
+    }
   });
 });
 
