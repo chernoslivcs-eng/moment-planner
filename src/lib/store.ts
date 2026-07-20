@@ -8,8 +8,8 @@
 // never carries a transient "pending" value.
 
 import { useSyncExternalStore } from "react";
-import type { Candidate, Intent, ParsedIntent, Status } from "./types";
-import { DURATION_PRESETS } from "./types";
+import type { Candidate, Condition, Intent, IntentEdit, ParsedIntent, Status } from "./types";
+import { DAYPARTS, DURATION_PRESETS, PRIORITIES, TIME_KINDS } from "./types";
 
 const INTENTS_KEY = "mp.intents.v1";
 const CANDIDATES_KEY = "mp.candidates.v1";
@@ -236,6 +236,77 @@ export function setTodayOverride(id: string, value: Intent["todayOverride"]): vo
   intents = intents.map((i) => (i.id === id ? { ...i, todayOverride: value } : i));
   persistIntents();
   emit();
+}
+
+// Manual editing (Крок 6 · Ланка 1). The polymorphic condition must survive editing intact, so
+// a patched condition is trusted ONLY when it is a well-formed variant carrying usable info; a
+// garbage/half-built shape is rejected and the previous condition stays (never degraded to
+// "none" behind the user's back — that would silently move the intent). Mirrors creation-time
+// strictness without borrowing normalize's degrade-to-none behaviour.
+function isValidCondition(c: unknown): c is Condition {
+  if (!c || typeof c !== "object") return false;
+  const cond = c as Record<string, unknown>;
+  if (cond.type === "none") return true;
+  if (cond.type === "location") {
+    const v = cond.value as Record<string, unknown> | undefined;
+    return !!v && typeof v.city === "string" && v.city.trim().length > 0;
+  }
+  if (cond.type === "time") {
+    const v = cond.value as Record<string, unknown> | undefined;
+    if (!v || typeof v !== "object") return false;
+    if (!(TIME_KINDS as readonly string[]).includes(v.kind as string)) return false;
+    const at = typeof v.at === "string" && v.at.trim().length > 0;
+    const weekday = typeof v.weekday === "string" && v.weekday.trim().length > 0;
+    const daypart = (DAYPARTS as readonly string[]).includes(v.daypart as string);
+    if (v.kind === "date" || v.kind === "datetime") return at;
+    if (v.kind === "weekday") return weekday;
+    if (v.kind === "daypart") return daypart;
+    return false;
+  }
+  return false;
+}
+
+// Update an already-committed intent in place (Крок 6 · Ланка 1). Accepts a partial patch over
+// the human-editable fields only; each provided field is validated exactly as at creation
+// (priority from the set, condition polymorphic-valid, duration a preset or null, text non-empty)
+// and a bad value is dropped so the rest of the intent is never corrupted. Status is untouched by
+// construction — it is not part of IntentEdit and we spread the existing intent, so open/done/
+// released survives any edit. The trailing emit() feeds the SAME buildToday recompute the pages
+// already run on `intents` change, so a condition edit moves the intent to its new section with
+// no extra machinery. Unknown id is a silent no-op.
+export function updateIntent(id: string, patch: IntentEdit): void {
+  let changed = false;
+  intents = intents.map((i) => {
+    if (i.id !== id) return i;
+    const next: Intent = { ...i };
+    if (typeof patch.text === "string" && patch.text.trim().length > 0) {
+      next.text = patch.text.trim();
+    }
+    if (
+      typeof patch.priority === "string" &&
+      (PRIORITIES as readonly string[]).includes(patch.priority)
+    ) {
+      next.priority = patch.priority;
+    }
+    if (patch.condition !== undefined && isValidCondition(patch.condition)) {
+      next.condition = patch.condition;
+    }
+    if (typeof patch.recurring === "boolean") {
+      next.recurring = patch.recurring;
+    }
+    if ("duration" in patch) {
+      const d = patch.duration;
+      if (d === null || (typeof d === "number" && DURATION_PRESETS.includes(d))) {
+        next.duration = d;
+      }
+    }
+    changed = true;
+    return next;
+  });
+  if (changed) {
+    persistIntents();
+    emit();
+  }
 }
 
 // ---- React bindings --------------------------------------------------------

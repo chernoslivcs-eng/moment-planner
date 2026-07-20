@@ -94,6 +94,14 @@ export interface Intent {
   duration: number | null; // minutes, default null — future plan realism
 }
 
+// A manual edit to an already-committed intent (Крок 6). A partial patch over the human-editable
+// fields ONLY — status is deliberately absent: editing corrects what the intent IS, never the
+// human decision about it (open/done/released lives apart, see setIntentStatus). One shape for
+// every context (розбір + committed), so there is a single editor, not copies.
+export type IntentEdit = Partial<
+  Pick<Intent, "text" | "priority" | "condition" | "recurring" | "duration">
+>;
+
 // Discrete duration presets in minutes (Крок 5). The estimate is intentionally coarse — a
 // realism hint, not a stopwatch — so both the parser validation and the розбір UI draw the
 // allowed values from here. `null` (unestimated / «будь-коли») is not a preset, it's absence.
