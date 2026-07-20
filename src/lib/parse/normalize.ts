@@ -2,7 +2,7 @@
 // clean, schema-valid ParsedIntent[]: strip markdown, coerce bad fields, drop garbage.
 
 import type { Condition, Daypart, ParsedIntent, Priority, TimeValue } from "../types";
-import { DAYPARTS, PRIORITIES, TIME_KINDS } from "../types";
+import { DAYPARTS, DURATION_PRESETS, PRIORITIES, TIME_KINDS } from "../types";
 
 // Thrown when the response can't be located/parsed as JSON at all (caller shows a friendly error).
 export class ParseFormatError extends Error {
@@ -42,6 +42,14 @@ function normalizePriority(v: unknown): Priority {
 // recurring is передиктується людиною, а помилковий повтор дратує найсильніше.
 function normalizeRecurring(v: unknown): boolean {
   return v === true;
+}
+
+// Never trust the model's `duration` (Крок 5). The estimate is a coarse realism hint, so we
+// accept ONLY a number that is exactly one of the discrete presets; anything else — a string
+// "60", a negative, zero, an off-grid 45, a missing field — degrades to null. A wrong minute
+// count would lie about the day, and null simply means «не оцінено», which is honest.
+function normalizeDuration(v: unknown): number | null {
+  return typeof v === "number" && DURATION_PRESETS.includes(v) ? v : null;
 }
 
 function normalizeDaypart(v: unknown): Daypart | null {
@@ -168,6 +176,8 @@ export function normalizeParseResponse(
       recurring: normalizeRecurring(obj.recurring),
       // Core produces "time" (a named moment) or "none" (unconditional). No today-default.
       condition: normalizeCondition(obj.condition),
+      // Approximate weight (Крок 5): a preset number or null. Never a fabricated minute count.
+      duration: normalizeDuration(obj.duration),
     });
   }
   return out;

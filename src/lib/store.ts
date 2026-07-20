@@ -150,10 +150,10 @@ function candidateToIntent(c: Candidate, status: Status): Intent {
     condition: c.condition,
     createdAt: new Date().toISOString(),
     todayOverride: c.pinToday ? "in" : null,
-    // Recurrence flows from the parsed candidate (Крок 2). duration stays null — no feature
-    // fills it yet. A freshly-committed intent already carries the full schema.
+    // Recurrence (Крок 2) and duration (Крок 5) both flow from the parsed candidate. The
+    // parser now estimates an approximate weight; a freshly-committed intent carries it through.
     recurring: c.recurring,
-    duration: null,
+    duration: c.duration,
   };
 }
 

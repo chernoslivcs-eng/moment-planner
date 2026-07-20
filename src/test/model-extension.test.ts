@@ -68,6 +68,7 @@ describe("Intent model extension — recurring & duration", () => {
         priority: "medium",
         recurring: false,
         condition: { type: "none" },
+        duration: null,
       };
       replaceCandidates([parsed]);
       commitAllCandidates();

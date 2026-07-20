@@ -62,6 +62,11 @@ export interface ParsedIntent {
   // non-boolean to false. Time/unconditional intents are always false.
   recurring: boolean;
   condition: Condition;
+  // Approximate weight of the intent in minutes (Крок 5 «реалістичність дня»). NOT a time
+  // tracker: the model estimates one of a few discrete presets ({15,30,60,120}); anything it
+  // can't judge is null. Validation accepts ONLY a preset number, else null. Feeds the quiet
+  // «приблизно на N годин» statement in Today.
+  duration: number | null;
 }
 
 // A parsed intent held in the Inbox review buffer (separate from the committed backlog),
@@ -88,6 +93,11 @@ export interface Intent {
   recurring: boolean; // default false — future geo-recurrence
   duration: number | null; // minutes, default null — future plan realism
 }
+
+// Discrete duration presets in minutes (Крок 5). The estimate is intentionally coarse — a
+// realism hint, not a stopwatch — so both the parser validation and the розбір UI draw the
+// allowed values from here. `null` (unestimated / «будь-коли») is not a preset, it's absence.
+export const DURATION_PRESETS: readonly number[] = [15, 30, 60, 120];
 
 export const PRIORITIES: readonly Priority[] = ["high", "medium", "low"];
 export const STATUSES: readonly Status[] = ["open", "done", "released"];

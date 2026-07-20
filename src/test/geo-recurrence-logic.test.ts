@@ -93,6 +93,7 @@ describe("provід recurring: парсинг → збережений намір
       priority: "low",
       recurring: true,
       condition: { type: "location", value: { city: "Львів" } },
+      duration: null,
     };
     replaceCandidates([parsed]);
     commitAllCandidates();
@@ -109,6 +110,7 @@ describe("provід recurring: парсинг → збережений намір
       priority: "medium",
       recurring: false,
       condition: { type: "location", value: { city: "Львів" } },
+      duration: null,
     };
     replaceCandidates([parsed]);
     commitAllCandidates();
