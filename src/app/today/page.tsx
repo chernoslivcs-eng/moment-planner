@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IntentCard } from "@/components/IntentCard";
 import { EmptyState } from "@/components/EmptyState";
-import { ActionButton } from "@/components/ActionButton";
+import { TodaySections } from "@/components/TodaySections";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday, type TodayView } from "@/lib/today";
 import { pluralizeIntents } from "@/lib/format";
-import { setIntentStatus, setTodayOverride, useIntents } from "@/lib/store";
+import { useIntents } from "@/lib/store";
 import { useCurrentCity } from "@/lib/geo/currentCity";
 
 // Ambient marks that sit to the RIGHT of «Сьогодні» (prototype `.ctx`): a place pin and a
@@ -124,76 +123,7 @@ export default function TodayPage() {
           hint="Коли настане момент якогось наміру — він сам виринає сюди, готовий до дії. А поки що нічого не тисне."
         />
       ) : (
-        <>
-          <div className="flex flex-col gap-3">
-        {view.active.map((intent) => {
-          // Recurring geo intent (Крок 2): can't be completed (no tick), resurfaces every time
-          // in the city. Its ONLY terminal action is «відпустити», carried by the corner ✕.
-          const recurring = intent.recurring && intent.condition.type === "location";
-          return recurring ? (
-            <IntentCard
-              key={intent.id}
-              text={intent.text}
-              priority={intent.priority}
-              condition={intent.condition}
-              now={now}
-              state="today"
-              recurring
-              onDismiss={() => setIntentStatus(intent.id, "released")}
-              dismissLabel="Відпустити"
-            />
-          ) : (
-            <IntentCard
-              key={intent.id}
-              text={intent.text}
-              priority={intent.priority}
-              condition={intent.condition}
-              now={now}
-              state="today"
-              onComplete={() => setIntentStatus(intent.id, "done")}
-              onDismiss={() => setTodayOverride(intent.id, "out")}
-            />
-          );
-        })}
-      </div>
-
-      {view.overdue.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="mb-3 flex items-center gap-2.5 px-1 text-[12px] font-semibold uppercase tracking-[0.13em] text-ink-3">
-            <span>Момент, здається, минув</span>
-            <span className="h-px flex-1 bg-line-soft" />
-          </h2>
-          <div className="flex flex-col gap-3">
-            {view.overdue.map((intent) => (
-              <IntentCard
-                key={intent.id}
-                text={intent.text}
-                priority={intent.priority}
-                condition={intent.condition}
-                now={now}
-                state="gone"
-                actions={
-                  <>
-                    <ActionButton
-                      tone="danger"
-                      onClick={() => setIntentStatus(intent.id, "released")}
-                    >
-                      Відпустити
-                    </ActionButton>
-                    <ActionButton
-                      tone="accent"
-                      onClick={() => setTodayOverride(intent.id, "in")}
-                    >
-                      Повернути в сьогодні
-                    </ActionButton>
-                  </>
-                }
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-        </>
+        <TodaySections view={view} now={now} />
       )}
     </main>
   );
