@@ -150,11 +150,18 @@ function candidateToIntent(c: Candidate, status: Status): Intent {
     condition: c.condition,
     createdAt: new Date().toISOString(),
     todayOverride: c.pinToday ? "in" : null,
-    // Forward-looking defaults set explicitly at creation (not relying on the load-time
-    // normalizer) — a freshly-committed intent already carries the full schema.
-    recurring: false,
+    // Recurrence flows from the parsed candidate (Крок 2). duration stays null — no feature
+    // fills it yet. A freshly-committed intent already carries the full schema.
+    recurring: c.recurring,
     duration: null,
   };
+}
+
+// A recurring intent is only meaningful when it names a place: it resurfaces every time the
+// person is back in that city. Recurrence adds NO new surfacing mechanism — it only disables
+// "complete-for-good" (see setIntentStatus). Time/unconditional recurring is inert.
+function isRecurringLocation(i: Intent): boolean {
+  return i.recurring === true && i.condition.type === "location";
 }
 
 // Signatures of intents still open in the backlog — the set we must not duplicate into.
@@ -201,7 +208,14 @@ export function commitAllCandidates(): void {
 // ---- Intents (committed backlog) -------------------------------------------
 
 export function setIntentStatus(id: string, status: Status): void {
-  intents = intents.map((i) => (i.id === id ? { ...i, status } : i));
+  intents = intents.map((i) => {
+    if (i.id !== id) return i;
+    // The heart of geo-recurrence: "done" never extinguishes a recurring location intent —
+    // it stays open to resurface next time the person is in that city. The only terminal
+    // action for it is "released". Every other intent behaves exactly as before.
+    if (status === "done" && isRecurringLocation(i)) return i;
+    return { ...i, status };
+  });
   persistIntents();
   emit();
 }
