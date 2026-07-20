@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useIntentEditor } from "@/components/IntentEditorSheet";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday } from "@/lib/today";
-import { useIntents } from "@/lib/store";
+import { setIntentStatus, useIntents } from "@/lib/store";
 import { useCurrentCity } from "@/lib/geo/currentCity";
 import { addDays, dayStart, isSameLocalDay, nearestWeekday } from "@/lib/dates";
 import type { Condition, Intent } from "@/lib/types";
@@ -545,6 +545,8 @@ export default function PlannedPage() {
                         now={now}
                         state="waiting"
                         onEdit={() => open(intent)}
+                        onDismiss={() => setIntentStatus(intent.id, "released")}
+                        dismissLabel="Відпустити"
                       />
                     ))}
                   </div>
@@ -569,6 +571,8 @@ export default function PlannedPage() {
                           now={now}
                           state="waiting"
                           onEdit={() => open(intent)}
+                          onDismiss={() => setIntentStatus(intent.id, "released")}
+                          dismissLabel="Відпустити"
                         />
                       ))}
                     </div>
@@ -595,6 +599,8 @@ export default function PlannedPage() {
                 state="waiting"
                 recurring={intent.recurring}
                 onEdit={() => open(intent)}
+                onDismiss={() => setIntentStatus(intent.id, "released")}
+                dismissLabel="Відпустити"
               />
             ))}
           </section>
@@ -614,6 +620,8 @@ export default function PlannedPage() {
                 now={now}
                 state="waiting"
                 onEdit={() => open(intent)}
+                onDismiss={() => setIntentStatus(intent.id, "released")}
+                dismissLabel="Відпустити"
               />
             ))}
           </section>
