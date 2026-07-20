@@ -89,6 +89,23 @@ function CloseIcon() {
   );
 }
 
+// Recurrence mark (prototype `I.repeat`) — a recurring intent shows this in place of the done
+// tick: it deliberately CANNOT be checked off. The circle mirrors the tick's footprint so the
+// card keeps its rhythm; the mark itself is non-interactive (a status, not a button).
+function RepeatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden>
+      <path
+        d="M17 2l4 4-4 4M21 6H8a4 4 0 00-4 4v1M7 22l-4-4 4-4M3 18h13a4 4 0 004-4v-1"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function IntentCard({
   text,
   priority,
@@ -100,6 +117,7 @@ export function IntentCard({
   onDismiss,
   dismissLabel = "Прибрати з сьогодні",
   done = false,
+  recurring = false,
 }: {
   text: string;
   priority: Priority;
@@ -113,6 +131,10 @@ export function IntentCard({
   // (drop from today); the Розбір gate overrides it (remove from the current review).
   dismissLabel?: string;
   done?: boolean;
+  // A recurring geo intent (Крок 2): shows the repeat mark instead of the done tick (it can't
+  // be completed), and its condition chip reads «щоразу у Львові». The caller only sets this
+  // for location + recurring; time/unconditional intents ignore it.
+  recurring?: boolean;
 }) {
   const isGone = state === "gone";
 
@@ -145,8 +167,18 @@ export function IntentCard({
           />
         ) : null}
 
-        {/* tick — mark done (opt-in): fills clay when done, empty circle otherwise */}
-        {onComplete ? (
+        {/* recurring geo → non-interactive repeat mark; it deliberately can't be checked off */}
+        {recurring && !isGone ? (
+          <span
+            role="img"
+            aria-label="Повторюється"
+            title="повторюється — не закривається, виринає щоразу"
+            className="mt-0.5 flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full border-[1.8px] border-line text-ink-3"
+          >
+            <RepeatIcon />
+          </span>
+        ) : onComplete ? (
+          /* tick — mark done (opt-in): fills clay when done, empty circle otherwise */
           <button
             type="button"
             onClick={onComplete}
@@ -182,7 +214,7 @@ export function IntentCard({
                 <span className="text-clay">
                   <ConditionIcon condition={condition} />
                 </span>
-                {describeCondition(condition, now)}
+                {describeCondition(condition, now, { recurring })}
               </span>
             </div>
           )}

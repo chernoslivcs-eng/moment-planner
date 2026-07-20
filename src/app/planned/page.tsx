@@ -574,6 +574,7 @@ export default function PlannedPage() {
                 condition={intent.condition}
                 now={now}
                 state="waiting"
+                recurring={intent.recurring}
               />
             ))}
           </section>

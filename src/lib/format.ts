@@ -76,10 +76,35 @@ function describeTime(value: TimeValue, now: Date): string {
   }
 }
 
-export function describeCondition(condition: Condition, now: Date = new Date()): string {
+// Locative ("у Львові") derived ON THE FLY from the stored nominative ("Львів") — the recurring
+// chip reads «щоразу у Львові». Demo-city dictionary now; a declension function replaces it on
+// prod. Unknown cities fall back to a grammatically safe «у місті X».
+const CITY_LOCATIVE: Record<string, string> = {
+  Київ: "у Києві",
+  Львів: "у Львові",
+  Вінниця: "у Вінниці",
+  Одеса: "в Одесі",
+};
+
+export function cityLocative(city: string): string {
+  return CITY_LOCATIVE[city] ?? `у місті ${city}`;
+}
+
+export interface DescribeConditionOptions {
+  // Recurrence lives IN the condition wording (not a separate badge): a recurring location
+  // reads «щоразу у Львові» instead of the flat city name. Only affects location conditions.
+  recurring?: boolean;
+}
+
+export function describeCondition(
+  condition: Condition,
+  now: Date = new Date(),
+  opts: DescribeConditionOptions = {},
+): string {
   if (condition.type === "time") return describeTime(condition.value, now);
   if (condition.type === "none") return "Будь-коли"; // unconditional — relevant any time
-  // location (city phase): the city name as the model resolved it (nominative). Declension-free
-  // so it reads correctly for any city; the place icon/section already frame it as a place.
+  // location (city phase): recurring → «щоразу у Львові» (locative on the fly); otherwise the
+  // flat nominative city as the model resolved it. The place icon already frames it as a place.
+  if (opts.recurring) return `щоразу ${cityLocative(condition.value.city)}`;
   return condition.value.city;
 }

@@ -126,18 +126,35 @@ export default function TodayPage() {
       ) : (
         <>
           <div className="flex flex-col gap-3">
-        {view.active.map((intent) => (
-          <IntentCard
-            key={intent.id}
-            text={intent.text}
-            priority={intent.priority}
-            condition={intent.condition}
-            now={now}
-            state="today"
-            onComplete={() => setIntentStatus(intent.id, "done")}
-            onDismiss={() => setTodayOverride(intent.id, "out")}
-          />
-        ))}
+        {view.active.map((intent) => {
+          // Recurring geo intent (Крок 2): can't be completed (no tick), resurfaces every time
+          // in the city. Its ONLY terminal action is «відпустити», carried by the corner ✕.
+          const recurring = intent.recurring && intent.condition.type === "location";
+          return recurring ? (
+            <IntentCard
+              key={intent.id}
+              text={intent.text}
+              priority={intent.priority}
+              condition={intent.condition}
+              now={now}
+              state="today"
+              recurring
+              onDismiss={() => setIntentStatus(intent.id, "released")}
+              dismissLabel="Відпустити"
+            />
+          ) : (
+            <IntentCard
+              key={intent.id}
+              text={intent.text}
+              priority={intent.priority}
+              condition={intent.condition}
+              now={now}
+              state="today"
+              onComplete={() => setIntentStatus(intent.id, "done")}
+              onDismiss={() => setTodayOverride(intent.id, "out")}
+            />
+          );
+        })}
       </div>
 
       {view.overdue.length > 0 ? (
