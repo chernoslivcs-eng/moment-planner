@@ -18,6 +18,8 @@ function intent(condition: Condition): Intent {
     condition,
     createdAt: new Date(2026, 0, 1, 0, 0, seq).toISOString(),
     todayOverride: null,
+    recurring: false,
+    duration: null,
   };
 }
 

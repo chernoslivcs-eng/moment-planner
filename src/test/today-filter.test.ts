@@ -21,6 +21,8 @@ function intent(over: Partial<Intent> & { value?: Partial<TimeValue> }): Intent 
     condition: { type: "time", value: tv(value ?? { kind: "daypart", daypart: "morning" }) },
     createdAt: new Date(2026, 0, 1, 0, 0, seq).toISOString(),
     todayOverride: null,
+    recurring: false,
+    duration: null,
     ...rest,
   };
 }

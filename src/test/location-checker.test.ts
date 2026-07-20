@@ -52,6 +52,8 @@ function locIntent(city: string): Intent {
     condition: { type: "location", value: { city } },
     createdAt: new Date(2026, 0, 1, 0, 0, seq).toISOString(),
     todayOverride: null,
+    recurring: false,
+    duration: null,
   };
 }
 function timeTodayIntent(): Intent {
@@ -67,6 +69,8 @@ function timeTodayIntent(): Intent {
     },
     createdAt: new Date(2026, 0, 1, 0, 0, seq).toISOString(),
     todayOverride: null,
+    recurring: false,
+    duration: null,
   };
 }
 
