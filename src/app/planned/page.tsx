@@ -212,7 +212,8 @@ const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffec
 
 // One grid cell — shared by every calendar surface (month grid, compact two-weeks) so dot
 // markers, selection (clay fill), today-highlight and out-of-month dimming stay identical
-// no matter which lens renders it. A day with intents is a tappable filter; a bare day is inert.
+// no matter which lens renders it. Every day is a tappable filter: one with intents narrows the
+// list to it; a bare day surfaces a warm «порожньо» line — so a tap always reacts, never dead.
 function renderCell(
   c: Cell,
   i: number,
@@ -254,20 +255,28 @@ function renderCell(
     );
   }
 
-  // Plain day: no intents → not interactive (matches «тап без намірів → нічого»).
+  // Plain day: no intents, but STILL tappable — mirrors the dotted-day reaction (same onSelect,
+  // same clay selection), just without a dot. A tap surfaces a warm «порожньо» line in the same
+  // slot below rather than looking dead: a silent non-reaction reads as a broken tap.
   return (
-    <span
+    <button
       key={c.key}
-      className={`flex aspect-square items-center justify-center rounded-xl text-sm ${
-        isToday
-          ? "bg-surface font-bold text-ink shadow-card"
-          : c.out
-            ? "font-medium text-ink-3/60"
-            : "font-medium text-ink-3/90"
+      type="button"
+      aria-pressed={isSelected}
+      aria-label={`${c.day} — порожньо`}
+      onClick={() => onSelect(c.key)}
+      className={`flex aspect-square items-center justify-center rounded-xl text-sm transition active:scale-[0.94] ${
+        isSelected
+          ? "bg-clay font-semibold text-white"
+          : isToday
+            ? "bg-surface font-bold text-ink shadow-card"
+            : c.out
+              ? "font-medium text-ink-3/60"
+              : "font-medium text-ink-3/90"
       }`}
     >
       {c.day}
-    </span>
+    </button>
   );
 }
 
@@ -442,14 +451,15 @@ export default function PlannedPage() {
   const isEmpty =
     timeWaiting.length === 0 && locationWaiting.length === 0 && otherIntents.length === 0;
 
-  // Calendar lens: dot map + a resilient selection (drop a stale day if its dot vanished
-  // after a re-derive, so the filter can't strand the user on an empty day).
+  // Calendar lens: dot map + the tapped day. ANY day is selectable now — a day WITH intents
+  // narrows the list to it; an EMPTY day surfaces a warm «порожньо» line in the same slot (a tap
+  // always reacts). selectedItems is just that day's intents — empty for a bare day, which the
+  // render below reads as "show the warm line instead of cards".
   const dayCounts = datedCounts(timeWaiting, now);
-  const activeKey = selectedKey && dayCounts.has(selectedKey) ? selectedKey : null;
-  const selectedItems = activeKey
+  const selectedItems = selectedKey
     ? timeWaiting.filter((i) => {
         const d = timeGroupDate(i.condition, now);
-        return d ? dayKey(d) === activeKey : false;
+        return d ? dayKey(d) === selectedKey : false;
       })
     : [];
 
@@ -506,15 +516,16 @@ export default function PlannedPage() {
             <CalendarLens
               now={now}
               counts={dayCounts}
-              selectedKey={activeKey}
+              selectedKey={selectedKey}
               onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
             />
 
-            {activeKey ? (
-              /* Обрано день у календарі — список звужено до цієї дати. */
+            {selectedKey ? (
+              /* Обрано день у календарі — список звужено до цієї дати. Порожній день дзеркалить
+                 той самий контейнер, лише з теплим рядком замість карток. */
               <section>
                 <div className="mb-4 flex items-center gap-2.5 px-1 font-display text-sm font-semibold text-ink-2">
-                  <span>Обрано {dayLabel(keyToDate(activeKey), now)}</span>
+                  <span>Обрано {dayLabel(keyToDate(selectedKey), now)}</span>
                   <button
                     type="button"
                     onClick={() => setSelectedKey(null)}
@@ -523,19 +534,23 @@ export default function PlannedPage() {
                     показати все
                   </button>
                 </div>
-                <div className="flex flex-col gap-3">
-                  {selectedItems.map((intent) => (
-                    <IntentCard
-                      key={intent.id}
-                      text={intent.text}
-                      priority={intent.priority}
-                      condition={intent.condition}
-                      now={now}
-                      state="waiting"
-                      onEdit={() => open(intent)}
-                    />
-                  ))}
-                </div>
+                {selectedItems.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {selectedItems.map((intent) => (
+                      <IntentCard
+                        key={intent.id}
+                        text={intent.text}
+                        priority={intent.priority}
+                        condition={intent.condition}
+                        now={now}
+                        state="waiting"
+                        onEdit={() => open(intent)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <AxisEmpty>На цей день поки порожньо.</AxisEmpty>
+                )}
               </section>
             ) : (
               <section>
