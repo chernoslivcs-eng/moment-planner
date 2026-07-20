@@ -21,7 +21,6 @@ import { IntentCard } from "@/components/IntentCard";
 import { IntentEditor } from "@/components/IntentEditor";
 import { DurationPresets } from "@/components/DurationPresets";
 import { ParseError, parseText } from "@/lib/api";
-import { EXAMPLE_BRAINDUMP } from "@/lib/example";
 import { pluralizeIntents } from "@/lib/format";
 import {
   commitAllCandidates,
@@ -360,7 +359,7 @@ function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => vo
           // No Web Speech API (iOS Safari, Chrome-on-iOS = WebKit): hide the mic entirely —
           // no broken control, no error. Text stays the always-available path.
           <p className="mt-3 font-display text-[12.5px] italic leading-snug text-ink-3">
-            Постав приклад або впиши свій потік.
+            Впиши свій потік — розкладу на наміри.
           </p>
         )}
       </div>
@@ -382,23 +381,12 @@ function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => vo
         </div>
       ) : null}
 
-      <div className="mt-5 flex gap-2.5">
-        <button
-          type="button"
-          onClick={() => {
-            setText(EXAMPLE_BRAINDUMP);
-            setError(null);
-          }}
-          disabled={loading}
-          className="flex-1 rounded-card border border-line px-4 py-3.5 text-[15px] font-semibold text-ink-2 transition active:scale-[0.98] disabled:opacity-40"
-        >
-          Спробувати приклад
-        </button>
+      <div className="mt-5">
         <button
           type="button"
           onClick={handleParse}
           disabled={!canParse}
-          className="flex-1 rounded-card bg-clay px-4 py-3.5 text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)] transition active:scale-[0.98] disabled:opacity-40"
+          className="w-full rounded-card bg-clay px-4 py-3.5 text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(180,100,63,0.28)] transition active:scale-[0.98] disabled:opacity-40"
         >
           {loading ? "Розбираю…" : "Розібрати"}
         </button>
