@@ -62,7 +62,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     // усі три заголовки присутні
     const ready = screen.getByRole("region", { name: "Готове до дії" });
     const anytime = screen.getByRole("region", { name: "Будь-коли" });
-    const passed = screen.getByRole("region", { name: "Прострочено" });
+    const passed = screen.getByRole("region", { name: "Досі чекають" });
 
     // моментний намір — під «Готове до дії», не під «Будь-коли»
     within(ready).getByText("подзвонити мамі");
@@ -105,7 +105,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     );
     expect(screen.getByRole("region", { name: "Готове до дії" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Будь-коли" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Прострочено" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Досі чекають" })).not.toBeInTheDocument();
   });
 
   it("картка простроченого має «Виконано», «Відпустити» і «Повернути в сьогодні»", () => {
@@ -115,7 +115,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
         view={view({ overdue: [intent({ id: "o1", text: "здати звіт", condition: TIME })] })}
       />,
     );
-    const passed = screen.getByRole("region", { name: "Прострочено" });
+    const passed = screen.getByRole("region", { name: "Досі чекають" });
     // рівний вибір: виконати АБО відпустити — обидві дії присутні
     expect(within(passed).getByRole("button", { name: "Виконано" })).toBeInTheDocument();
     expect(within(passed).getByRole("button", { name: "Відпустити" })).toBeInTheDocument();
@@ -135,6 +135,6 @@ describe("TodaySections — три зони «Сьогодні»", () => {
     );
     expect(screen.getByRole("region", { name: "Будь-коли" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Готове до дії" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Прострочено" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Досі чекають" })).not.toBeInTheDocument();
   });
 });

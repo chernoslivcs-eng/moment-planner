@@ -106,7 +106,7 @@ export function TodaySections({ view, now }: { view: TodayView; now: Date }) {
       ) : null}
 
       {view.overdue.length > 0 ? (
-        <Section title="Прострочено" count={view.overdue.length}>
+        <Section title="Досі чекають" count={view.overdue.length}>
           {view.overdue.map((intent) => (
             <IntentCard
               key={intent.id}

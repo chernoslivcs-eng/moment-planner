@@ -504,7 +504,7 @@ export default function PlannedPage() {
         <EmptyState
           glyph={<CalendarGlyph />}
           title="Тут тихо чекають наміри"
-          hint="Запиши перший — і він приляже тут до свого часу. Це поле, а не список справ: воно не докоряє."
+          hint="Запиши перший — і він буде тут до свого часу. Це поле, а не список справ: воно не докоряє."
         />
       ) : axis === "time" ? (
         timeWaiting.length === 0 ? (
@@ -586,7 +586,7 @@ export default function PlannedPage() {
         /* Вісь «Місце» — наміри, чий час настане в певному місті (жива геолокація). Виринають
            у «Сьогодні», коли ти там; тут тихо чекають, поки ти деінде. */
         locationWaiting.length === 0 ? (
-          <AxisEmpty>Немає намірів, прив&apos;язаних до місця. Скажи «у Львові…» — і він приляже сюди.</AxisEmpty>
+          <AxisEmpty>Немає намірів, прив&apos;язаних до місця. Скажи «у Львові…» — і він чекатиме на тебе там.</AxisEmpty>
         ) : (
           <section className="flex flex-col gap-3">
             {locationWaiting.map((intent) => (

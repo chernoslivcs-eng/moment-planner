@@ -104,7 +104,7 @@ export default function TodayPage() {
       {/* Full header stays in EVERY state (prototype): eyebrow + «Сьогодні» + ambient + date. */}
       <header className="mb-5 pt-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-3">
-          План на дію
+          Момент настав
         </p>
         <div className="mt-2 flex items-center justify-between gap-3">
           <h1 className="font-display text-[33px] font-semibold leading-[1.05] tracking-tight text-ink">
@@ -125,7 +125,7 @@ export default function TodayPage() {
         <EmptyState
           glyph={<ArrowDownGlyph />}
           title="Сьогодні тут спокійно"
-          hint="Коли настане момент якогось наміру — він сам виринає сюди, готовий до дії. А поки що нічого не тисне."
+          hint="Коли настане момент якогось наміру — він сам виринає сюди, готовий до дії. А поки що ніщо не тисне."
         />
       ) : (
         <TodaySections view={view} now={now} />

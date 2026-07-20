@@ -10,9 +10,9 @@ const DAYPART_LABEL: Record<Daypart, string> = {
 };
 
 const PRIORITY_LABEL: Record<Priority, string> = {
-  high: "Високий",
-  medium: "Середній",
-  low: "Низький",
+  high: "важливе",
+  medium: "буденне",
+  low: "колись",
 };
 
 export function priorityLabel(p: Priority): string {

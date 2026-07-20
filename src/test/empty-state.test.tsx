@@ -26,7 +26,7 @@ describe("IntentCard", () => {
     };
     render(<IntentCard text="подзвонити мамі" priority="high" condition={condition} />);
     expect(screen.getByText("подзвонити мамі")).toBeInTheDocument();
-    expect(screen.getByText("Високий")).toBeInTheDocument();
+    expect(screen.getByText("важливе")).toBeInTheDocument();
     expect(screen.getByText("Зранку")).toBeInTheDocument();
   });
 });

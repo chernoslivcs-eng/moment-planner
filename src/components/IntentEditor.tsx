@@ -19,8 +19,8 @@ type EditableIntent = Pick<Intent, "text" | "priority" | "condition" | "recurrin
 type CondKey = "today" | "tomorrow" | "custom" | "none" | "location";
 
 const PRIO_PILLS: { value: Priority; label: string; dot: string }[] = [
-  { value: "high", label: "важливо", dot: "bg-clay" },
-  { value: "medium", label: "звичайне", dot: "bg-amber" },
+  { value: "high", label: "важливе", dot: "bg-clay" },
+  { value: "medium", label: "буденне", dot: "bg-amber" },
   { value: "low", label: "колись", dot: "bg-sage" },
 ];
 

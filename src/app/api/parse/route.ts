@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     body = (await req.json()) as ParseRequest;
   } catch {
     return NextResponse.json(
-      { code: "bad_request", message: "Некоректний запит" },
+      { code: "bad_request", message: "Щось не так із запитом. Спробуй ще раз." },
       { status: 400 },
     );
   }
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ code: e.kind, message: providerMessage(e) }, { status });
       }
       return NextResponse.json(
-        { code: "unknown", message: "Несподівана помилка на сервері" },
+        { code: "unknown", message: "Щось збоїло на моєму боці. Спробуй ще раз." },
         { status: 500 },
       );
     }
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
   return NextResponse.json(
     {
       code: "format",
-      message: "Не вдалося розібрати відповідь. Спробуй ще раз.",
+      message: "Не вдалося розкласти це на наміри. Спробуй ще раз.",
       detail: lastFormatError instanceof Error ? lastFormatError.message : undefined,
     },
     { status: 502 },
@@ -80,6 +80,6 @@ export async function POST(req: Request) {
 
 function providerMessage(e: ProviderError): string {
   return e.kind === "config"
-    ? "Сервіс розбору не налаштований (немає ключа)."
-    : "Сервіс розбору тимчасово недоступний. Спробуй ще раз.";
+    ? "Розбір поки недоступний. Спробуй трохи згодом."
+    : "Не можу зараз розібрати — спробуй за хвилину.";
 }

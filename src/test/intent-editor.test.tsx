@@ -55,8 +55,8 @@ describe("IntentEditor — префіл наявних значень", () => {
 
   it("активний пріоритет позначено", () => {
     renderEditor({ priority: "high" });
-    expect(screen.getByRole("button", { name: "важливо" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "звичайне" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "важливе" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "буденне" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("активна умова позначена (без умови)", () => {

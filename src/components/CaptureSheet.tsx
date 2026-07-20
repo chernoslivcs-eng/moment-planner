@@ -319,14 +319,14 @@ function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => vo
     <>
       <h2 className="mt-1 font-display text-[23px] font-semibold text-ink">Що в голові?</h2>
       <p className="mt-1 mb-4 text-[13.5px] leading-relaxed text-ink-2">
-        Вивали все підряд — одним потоком, як думається. Розкладу на наміри сам.
+        Виклади як є — одним потоком, як думається. Розкладу на наміри сам.
       </p>
 
       <div className="rounded-card border border-line bg-surface p-4 shadow-card">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="напр. купити квитки, подзвонити мамі ввечері, відповісти щодо сценарію…"
+          placeholder="як-от купити квитки, подзвонити мамі ввечері, відповісти щодо сценарію…"
           rows={5}
           className="w-full resize-none bg-transparent font-display text-[19px] leading-relaxed text-ink outline-none placeholder:italic placeholder:text-ink-3"
         />
@@ -359,7 +359,7 @@ function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => vo
           // No Web Speech API (iOS Safari, Chrome-on-iOS = WebKit): hide the mic entirely —
           // no broken control, no error. Text stays the always-available path.
           <p className="mt-3 font-display text-[12.5px] italic leading-snug text-ink-3">
-            Впиши свій потік — розкладу на наміри.
+            Просто пиши, що в голові — розкладу на наміри.
           </p>
         )}
       </div>
@@ -441,7 +441,7 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
     <>
       <h2 className="mt-1 font-display text-[23px] font-semibold text-ink">Ось як я почув</h2>
       <p className="mt-1 mb-4 text-[13.5px] leading-relaxed text-ink-2">
-        Перевір кожен намір до збереження. Зайве — прибери хрестиком, решту підтвердь нижче.
+        Перевір кожен намір до збереження. Зайве — прибери, решту підтвердь нижче.
       </p>
 
       <div className="flex flex-col gap-3">
