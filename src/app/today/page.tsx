@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { TodaySections } from "@/components/TodaySections";
+import { DayLoadLine } from "@/components/DayLoadLine";
 import { currentContext } from "@/lib/conditions/context";
+import { estimateTodayMinutes } from "@/lib/realism";
 import { buildToday, type TodayView } from "@/lib/today";
 import { pluralizeIntents } from "@/lib/format";
 import { useIntents } from "@/lib/store";
@@ -113,6 +115,9 @@ export default function TodayPage() {
         <p className="mt-1.5 font-display text-[15px] italic leading-relaxed text-ink-2">
           {daySubtitle}
         </p>
+        {/* Тиха реалістичність дня (Крок 5): констатує приблизну вагу сьогоднішніх намірів під
+            датою. Сама ховається, коли ваги нема (порожній / усе-null день). */}
+        {!isEmpty ? <DayLoadLine minutes={estimateTodayMinutes(view)} /> : null}
       </header>
 
       {isEmpty ? (
