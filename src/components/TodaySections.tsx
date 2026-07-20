@@ -13,6 +13,7 @@ import { ActionButton } from "@/components/ActionButton";
 import type { TodayView } from "@/lib/today";
 import type { Intent } from "@/lib/types";
 import { setIntentStatus, setTodayOverride } from "@/lib/store";
+import { useIntentEditor } from "@/components/IntentEditorSheet";
 
 // A moment-based intent has a condition that names a moment (a time or a place). `none` intents
 // carry no moment — they belong to the quiet «Будь-коли» zone. This split is the only new logic
@@ -52,6 +53,7 @@ function Section({
 
 // A single active («Готове до дії» / «Будь-коли») card — same affordances as the old flat list.
 function ActiveCard({ intent, now }: { intent: Intent; now: Date }) {
+  const { open } = useIntentEditor();
   // Recurring geo intent (Крок 2): can't be completed (no tick), resurfaces every time in the
   // city. Its ONLY terminal action is «відпустити», carried by the corner ✕.
   const recurring = intent.recurring && intent.condition.type === "location";
@@ -63,6 +65,7 @@ function ActiveCard({ intent, now }: { intent: Intent; now: Date }) {
       now={now}
       state="today"
       recurring
+      onEdit={() => open(intent)}
       onDismiss={() => setIntentStatus(intent.id, "released")}
       dismissLabel="Відпустити"
     />
@@ -73,6 +76,7 @@ function ActiveCard({ intent, now }: { intent: Intent; now: Date }) {
       condition={intent.condition}
       now={now}
       state="today"
+      onEdit={() => open(intent)}
       onComplete={() => setIntentStatus(intent.id, "done")}
       onDismiss={() => setTodayOverride(intent.id, "out")}
     />

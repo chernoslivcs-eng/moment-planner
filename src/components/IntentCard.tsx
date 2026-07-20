@@ -115,6 +115,7 @@ export function IntentCard({
   state = "today",
   onComplete,
   onDismiss,
+  onEdit,
   dismissLabel = "Прибрати з сьогодні",
   done = false,
   recurring = false,
@@ -127,6 +128,10 @@ export function IntentCard({
   state?: IntentCardState;
   onComplete?: () => void;
   onDismiss?: () => void;
+  // Крок 6 · Ланка 2 — tapping the intent TEXT opens the single editor. Opt-in (only saved
+  // cards on «Сьогодні»/«Заплановано» pass it); the tick and corner ✕ stay separate zones and
+  // never open the editor. Without it the text is plain, non-interactive copy (розбір/empty).
+  onEdit?: () => void;
   // Accessible label / tooltip for the corner ✕. Defaults to the «Сьогодні» meaning
   // (drop from today); the Розбір gate overrides it (remove from the current review).
   dismissLabel?: string;
@@ -192,13 +197,27 @@ export function IntentCard({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <p
-            className={`text-[15px] leading-snug break-words ${
-              isGone ? "font-normal text-ink-2" : "font-medium text-ink"
-            } ${done ? "text-ink-3 line-through" : ""} ${onDismiss ? "pr-8" : ""}`}
-          >
-            {text}
-          </p>
+          {onEdit && !isGone ? (
+            // Text is the tap-target that opens the editor. A left-aligned, full-width button so
+            // the whole line is tappable; the tick and corner ✕ live outside it, untouched.
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`block w-full text-left text-[15px] font-medium leading-snug text-ink break-words transition active:opacity-70 ${
+                done ? "text-ink-3 line-through" : ""
+              } ${onDismiss ? "pr-8" : ""}`}
+            >
+              {text}
+            </button>
+          ) : (
+            <p
+              className={`text-[15px] leading-snug break-words ${
+                isGone ? "font-normal text-ink-2" : "font-medium text-ink"
+              } ${done ? "text-ink-3 line-through" : ""} ${onDismiss ? "pr-8" : ""}`}
+            >
+              {text}
+            </p>
+          )}
           {/* priority conveyed visually by the meta-row dot; kept for assistive tech */}
           <span className="sr-only">{priorityLabel(priority)}</span>
 

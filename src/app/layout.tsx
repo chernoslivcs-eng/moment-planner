@@ -3,6 +3,7 @@ import { Manrope, Spectral } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { CaptureSheetProvider } from "@/components/CaptureSheet";
+import { IntentEditorProvider } from "@/components/IntentEditorSheet";
 
 // Body text — Manrope. Cyrillic subset is mandatory (Ukrainian UI).
 const manrope = Manrope({
@@ -38,8 +39,10 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         <CaptureSheetProvider>
-          <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
-          <BottomNav />
+          <IntentEditorProvider>
+            <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
+            <BottomNav />
+          </IntentEditorProvider>
         </CaptureSheetProvider>
       </body>
     </html>

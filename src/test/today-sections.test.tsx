@@ -6,11 +6,19 @@
 
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { TodaySections } from "@/components/TodaySections";
+import { IntentEditorProvider } from "@/components/IntentEditorSheet";
 import type { TodayView } from "@/lib/today";
 import type { Condition, Intent } from "@/lib/types";
 
 const NOW = new Date(2026, 6, 20);
+
+// TodaySections' active cards open the shared editor on tap, so they must render under its
+// provider (useIntentEditor). Wrap every render — presentation assertions are unaffected.
+function renderWithEditor(ui: ReactElement) {
+  return render(<IntentEditorProvider>{ui}</IntentEditorProvider>);
+}
 
 const TIME: Condition = {
   type: "time",
@@ -38,7 +46,7 @@ function view(over: Partial<TodayView>): TodayView {
 
 describe("TodaySections — три зони «Сьогодні»", () => {
   it("розводить моментні / безумовні / минулі у три секції", () => {
-    render(
+    renderWithEditor(
       <TodaySections
         now={NOW}
         view={view({
@@ -69,7 +77,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
   });
 
   it("нічого не губиться: усі активні наміри показані рівно раз", () => {
-    render(
+    renderWithEditor(
       <TodaySections
         now={NOW}
         view={view({
@@ -87,7 +95,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
   });
 
   it("порожні секції ховають заголовок (лише моментні → без «Будь-коли»/«Минуло»)", () => {
-    render(
+    renderWithEditor(
       <TodaySections
         now={NOW}
         view={view({
@@ -101,7 +109,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
   });
 
   it("картка простроченого має «Виконано», «Відпустити» і «Повернути в сьогодні»", () => {
-    render(
+    renderWithEditor(
       <TodaySections
         now={NOW}
         view={view({ overdue: [intent({ id: "o1", text: "здати звіт", condition: TIME })] })}
@@ -117,7 +125,7 @@ describe("TodaySections — три зони «Сьогодні»", () => {
   });
 
   it("лише безумовні → показана тільки «Будь-коли»", () => {
-    render(
+    renderWithEditor(
       <TodaySections
         now={NOW}
         view={view({

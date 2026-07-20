@@ -14,6 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IntentCard } from "@/components/IntentCard";
 import { EmptyState } from "@/components/EmptyState";
+import { useIntentEditor } from "@/components/IntentEditorSheet";
 import { currentContext } from "@/lib/conditions/context";
 import { buildToday } from "@/lib/today";
 import { useIntents } from "@/lib/store";
@@ -403,6 +404,7 @@ export default function PlannedPage() {
   // excluded from the waiting field here (and reappears when you leave that city).
   const city = useCurrentCity();
   const now = new Date();
+  const { open } = useIntentEditor();
 
   // Re-derive on the same triggers as «Сьогодні» so the split stays consistent (and on city).
   useEffect(() => {
@@ -530,6 +532,7 @@ export default function PlannedPage() {
                       condition={intent.condition}
                       now={now}
                       state="waiting"
+                      onEdit={() => open(intent)}
                     />
                   ))}
                 </div>
@@ -550,6 +553,7 @@ export default function PlannedPage() {
                           condition={intent.condition}
                           now={now}
                           state="waiting"
+                          onEdit={() => open(intent)}
                         />
                       ))}
                     </div>
@@ -575,6 +579,7 @@ export default function PlannedPage() {
                 now={now}
                 state="waiting"
                 recurring={intent.recurring}
+                onEdit={() => open(intent)}
               />
             ))}
           </section>
@@ -593,6 +598,7 @@ export default function PlannedPage() {
                 condition={intent.condition}
                 now={now}
                 state="waiting"
+                onEdit={() => open(intent)}
               />
             ))}
           </section>
