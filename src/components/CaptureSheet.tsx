@@ -18,6 +18,7 @@ import {
   type SetStateAction,
 } from "react";
 import { IntentCard } from "@/components/IntentCard";
+import { DurationPresets } from "@/components/DurationPresets";
 import { ParseError, parseText } from "@/lib/api";
 import { EXAMPLE_BRAINDUMP } from "@/lib/example";
 import { pluralizeIntents } from "@/lib/format";
@@ -25,6 +26,7 @@ import {
   commitAllCandidates,
   removeCandidate,
   replaceCandidates,
+  setCandidateDuration,
   useCandidates,
 } from "@/lib/store";
 
@@ -433,19 +435,31 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
 
       <div className="flex flex-col gap-3">
         {candidates.map((c) => (
-          <IntentCard
-            key={c.cid}
-            text={c.text}
-            priority={c.priority}
-            condition={c.condition}
-            now={now}
-            state="today"
-            // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
-            // wrongly-heard intent from this review via the corner ✕. Disposition actions
-            // («Виконано / В сьогодні / Відпустити») belong to a SAVED intent on «Сьогодні», not here.
-            onDismiss={() => removeCandidate(c.cid)}
-            dismissLabel="Прибрати з розбору"
-          />
+          <div key={c.cid} className="flex flex-col gap-2">
+            <IntentCard
+              text={c.text}
+              priority={c.priority}
+              condition={c.condition}
+              now={now}
+              state="today"
+              // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
+              // wrongly-heard intent from this review via the corner ✕. Disposition actions
+              // («Виконано / В сьогодні / Відпустити») belong to a SAVED intent on «Сьогодні», not here.
+              onDismiss={() => removeCandidate(c.cid)}
+              dismissLabel="Прибрати з розбору"
+            />
+            {/* Тиха оцінка тривалості (Крок 5): пресети під карткою правлять модельну оцінку.
+                Не числове поле, не тиск — можна лишити «—». */}
+            <div className="flex items-center gap-2.5 px-1">
+              <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-3/70">
+                Скільки часу
+              </span>
+              <DurationPresets
+                value={c.duration}
+                onChange={(v) => setCandidateDuration(c.cid, v)}
+              />
+            </div>
+          </div>
         ))}
       </div>
 

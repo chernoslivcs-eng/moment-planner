@@ -9,6 +9,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { Candidate, Intent, ParsedIntent, Status } from "./types";
+import { DURATION_PRESETS } from "./types";
 
 const INTENTS_KEY = "mp.intents.v1";
 const CANDIDATES_KEY = "mp.candidates.v1";
@@ -137,6 +138,17 @@ export function toggleCandidatePinToday(cid: string): void {
   candidates = candidates.map((c) =>
     c.cid === cid ? { ...c, pinToday: !c.pinToday } : c,
   );
+  persistCandidates();
+  emit();
+}
+
+// Set a candidate's approximate duration during Розбір (Крок 5 · Ланка 3). Presentation of the
+// existing `duration` field, not new mechanics: the human nudges the model's estimate via quiet
+// presets. Guard the value — accept only a discrete preset or null (clear) — so a stray number
+// can never enter the buffer; anything else is ignored and the candidate stays as it was.
+export function setCandidateDuration(cid: string, duration: number | null): void {
+  if (duration !== null && !DURATION_PRESETS.includes(duration)) return;
+  candidates = candidates.map((c) => (c.cid === cid ? { ...c, duration } : c));
   persistCandidates();
   emit();
 }
