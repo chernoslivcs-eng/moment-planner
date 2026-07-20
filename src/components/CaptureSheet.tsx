@@ -465,6 +465,10 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
               condition={c.condition}
               now={now}
               state="today"
+              // Recurrence is meaningful only for a place — show the repeat mark already in Розбір
+              // (parity with «Заплановано»), so a candidate toggled to «повторюється» reads as
+              // recurring BEFORE «Підтвердити», not only after it commits.
+              recurring={c.recurring && c.condition.type === "location"}
               // Tap the text to fix what was mis-heard — opens the shared editor (Крок 6 · Ланка 4).
               onEdit={() => setEditing(c)}
               // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
