@@ -144,13 +144,10 @@ export function toggleCandidatePinToday(cid: string): void {
 
 // Set a candidate's approximate duration during Розбір (Крок 5 · Ланка 3). Presentation of the
 // existing `duration` field, not new mechanics: the human nudges the model's estimate via quiet
-// presets. Guard the value — accept only a discrete preset or null (clear) — so a stray number
-// can never enter the buffer; anything else is ignored and the candidate stays as it was.
+// presets. Now a thin case of the general candidate edit (Крок 6 · Ланка 4) — updateCandidate
+// carries the same preset-or-null guard, so a stray number can never enter the buffer.
 export function setCandidateDuration(cid: string, duration: number | null): void {
-  if (duration !== null && !DURATION_PRESETS.includes(duration)) return;
-  candidates = candidates.map((c) => (c.cid === cid ? { ...c, duration } : c));
-  persistCandidates();
-  emit();
+  updateCandidate(cid, { duration });
 }
 
 function candidateToIntent(c: Candidate, status: Status): Intent {
@@ -266,45 +263,75 @@ function isValidCondition(c: unknown): c is Condition {
   return false;
 }
 
-// Update an already-committed intent in place (Крок 6 · Ланка 1). Accepts a partial patch over
-// the human-editable fields only; each provided field is validated exactly as at creation
-// (priority from the set, condition polymorphic-valid, duration a preset or null, text non-empty)
-// and a bad value is dropped so the rest of the intent is never corrupted. Status is untouched by
-// construction — it is not part of IntentEdit and we spread the existing intent, so open/done/
-// released survives any edit. The trailing emit() feeds the SAME buildToday recompute the pages
-// already run on `intents` change, so a condition edit moves the intent to its new section with
-// no extra machinery. Unknown id is a silent no-op.
+// The human-editable core, shared by a committed Intent and a Розбір Candidate — exactly the
+// fields IntentEdit patches. Both entities carry these, so a single edit rule serves both.
+type Editable = Pick<Intent, "text" | "priority" | "condition" | "recurring" | "duration">;
+
+// Apply a partial IntentEdit onto a copy of any editable-bearing entity (Крок 6). Each provided
+// field is validated exactly as at creation (priority from the set, condition polymorphic-valid,
+// duration a preset or null, text non-empty); a bad value is dropped so the rest is never
+// corrupted. Only these five fields are ever touched — every other field of `target` (Intent.status
+// / id, Candidate.cid / pinToday) is carried through verbatim by the spread, so editing corrects
+// what the thing IS, never the human decision about it. This is the single point both update
+// functions share, so intent and candidate edits can never drift apart.
+function applyEdit<T extends Editable>(target: T, patch: IntentEdit): T {
+  const next: T = { ...target };
+  if (typeof patch.text === "string" && patch.text.trim().length > 0) {
+    next.text = patch.text.trim();
+  }
+  if (
+    typeof patch.priority === "string" &&
+    (PRIORITIES as readonly string[]).includes(patch.priority)
+  ) {
+    next.priority = patch.priority;
+  }
+  if (patch.condition !== undefined && isValidCondition(patch.condition)) {
+    next.condition = patch.condition;
+  }
+  if (typeof patch.recurring === "boolean") {
+    next.recurring = patch.recurring;
+  }
+  if ("duration" in patch) {
+    const d = patch.duration;
+    if (d === null || (typeof d === "number" && DURATION_PRESETS.includes(d))) {
+      next.duration = d;
+    }
+  }
+  return next;
+}
+
+// Update an already-committed intent in place (Крок 6 · Ланка 1). Status is untouched by
+// construction — it is not part of IntentEdit and applyEdit spreads the existing intent, so
+// open/done/released survives any edit. The trailing emit() feeds the SAME buildToday recompute
+// the pages already run on `intents` change, so a condition edit moves the intent to its new
+// section with no extra machinery. Unknown id is a silent no-op.
 export function updateIntent(id: string, patch: IntentEdit): void {
   let changed = false;
   intents = intents.map((i) => {
     if (i.id !== id) return i;
-    const next: Intent = { ...i };
-    if (typeof patch.text === "string" && patch.text.trim().length > 0) {
-      next.text = patch.text.trim();
-    }
-    if (
-      typeof patch.priority === "string" &&
-      (PRIORITIES as readonly string[]).includes(patch.priority)
-    ) {
-      next.priority = patch.priority;
-    }
-    if (patch.condition !== undefined && isValidCondition(patch.condition)) {
-      next.condition = patch.condition;
-    }
-    if (typeof patch.recurring === "boolean") {
-      next.recurring = patch.recurring;
-    }
-    if ("duration" in patch) {
-      const d = patch.duration;
-      if (d === null || (typeof d === "number" && DURATION_PRESETS.includes(d))) {
-        next.duration = d;
-      }
-    }
     changed = true;
-    return next;
+    return applyEdit(i, patch);
   });
   if (changed) {
     persistIntents();
+    emit();
+  }
+}
+
+// Update a candidate in the Розбір buffer (Крок 6 · Ланка 4) — the mirror of updateIntent over
+// candidates, keyed by cid. Same IntentEdit, same validation via applyEdit; the candidate's
+// identity/decision fields (cid, pinToday) are untouched, the analogue of status staying put on an
+// intent. So the SAME editor serves Розбір and the committed backlog — one component, no copies.
+// emit() re-renders the review buffer. Unknown cid is a silent no-op.
+export function updateCandidate(cid: string, patch: IntentEdit): void {
+  let changed = false;
+  candidates = candidates.map((c) => {
+    if (c.cid !== cid) return c;
+    changed = true;
+    return applyEdit(c, patch);
+  });
+  if (changed) {
+    persistCandidates();
     emit();
   }
 }

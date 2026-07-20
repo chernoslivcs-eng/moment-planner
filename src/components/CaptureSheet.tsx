@@ -18,6 +18,7 @@ import {
   type SetStateAction,
 } from "react";
 import { IntentCard } from "@/components/IntentCard";
+import { IntentEditor } from "@/components/IntentEditor";
 import { DurationPresets } from "@/components/DurationPresets";
 import { ParseError, parseText } from "@/lib/api";
 import { EXAMPLE_BRAINDUMP } from "@/lib/example";
@@ -27,8 +28,10 @@ import {
   removeCandidate,
   replaceCandidates,
   setCandidateDuration,
+  updateCandidate,
   useCandidates,
 } from "@/lib/store";
+import type { Candidate } from "@/lib/types";
 
 type SheetContext = { isOpen: boolean; open: () => void; close: () => void };
 
@@ -409,6 +412,26 @@ function CaptureStep({ active, onParsed }: { active: boolean; onParsed: () => vo
 function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const candidates = useCandidates();
   const now = new Date();
+  // Which candidate is being edited, if any. Tapping a candidate's text opens the SAME editor
+  // used on «Сьогодні»/«Заплановано» over this candidate; saving routes through updateCandidate.
+  const [editing, setEditing] = useState<Candidate | null>(null);
+
+  // Editing sub-view: the one shared IntentEditor, hosted here for the Розбір buffer. «Готово»
+  // writes the patch back to the candidate (cid keyed); «Скасувати» drops it and returns.
+  if (editing) {
+    return (
+      <IntentEditor
+        key={editing.cid}
+        intent={editing}
+        now={now}
+        onSave={(edit) => {
+          updateCandidate(editing.cid, edit);
+          setEditing(null);
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
 
   if (candidates.length === 0) {
     return (
@@ -442,6 +465,8 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
               condition={c.condition}
               now={now}
               state="today"
+              // Tap the text to fix what was mis-heard — opens the shared editor (Крок 6 · Ланка 4).
+              onEdit={() => setEditing(c)}
               // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
               // wrongly-heard intent from this review via the corner ✕. Disposition actions
               // («Виконано / В сьогодні / Відпустити») belong to a SAVED intent on «Сьогодні», not here.
