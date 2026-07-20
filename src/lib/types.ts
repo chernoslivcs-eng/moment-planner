@@ -78,6 +78,11 @@ export interface Intent {
   // Manual Today-membership override (roadmap §1/§3 actions "в сьогодні" / "прибрати з сьогодні").
   // null = follow the derived condition. Additive; does not touch the polymorphic condition.
   todayOverride?: "in" | "out" | null;
+  // Forward-looking schema fields (Крок 1). Present with defaults ahead of the features that
+  // will read them — NO behaviour reads them yet. Recurrence will later be a modifier over the
+  // existing polymorphic condition, not a new condition shape.
+  recurring: boolean; // default false — future geo-recurrence
+  duration: number | null; // minutes, default null — future plan realism
 }
 
 export const PRIORITIES: readonly Priority[] = ["high", "medium", "low"];

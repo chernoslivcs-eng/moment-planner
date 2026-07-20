@@ -36,9 +36,23 @@ function readKey<T>(key: string): T[] {
   }
 }
 
+// The SINGLE back-fill point for the forward-looking schema fields (Крок 1). Every Intent
+// loaded from localStorage passes through here exactly once, so legacy backlogs saved by an
+// older build (no `recurring`/`duration` keys) gain the defaults without loss, and any values
+// already present survive verbatim (no clobber). Keep this the only place defaults are filled
+// on load — do not scatter `?? false` / `?? null` across use sites.
+export function normalizeStoredIntent(raw: Intent): Intent {
+  return {
+    ...raw,
+    // typeof guards (not `??`) so a stored `false`/`0` survives rather than being replaced.
+    recurring: typeof raw.recurring === "boolean" ? raw.recurring : false,
+    duration: typeof raw.duration === "number" ? raw.duration : null,
+  };
+}
+
 function loadOnce() {
   if (loaded || typeof window === "undefined") return;
-  intents = readKey<Intent>(INTENTS_KEY);
+  intents = readKey<Intent>(INTENTS_KEY).map(normalizeStoredIntent);
   candidates = readKey<Candidate>(CANDIDATES_KEY);
   loaded = true;
 }
@@ -136,6 +150,10 @@ function candidateToIntent(c: Candidate, status: Status): Intent {
     condition: c.condition,
     createdAt: new Date().toISOString(),
     todayOverride: c.pinToday ? "in" : null,
+    // Forward-looking defaults set explicitly at creation (not relying on the load-time
+    // normalizer) — a freshly-committed intent already carries the full schema.
+    recurring: false,
+    duration: null,
   };
 }
 
