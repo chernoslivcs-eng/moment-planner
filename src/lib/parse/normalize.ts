@@ -37,6 +37,13 @@ function normalizePriority(v: unknown): Priority {
     : "medium";
 }
 
+// Never trust the model's `recurring`: accept ONLY a literal boolean, coerce anything else
+// (missing, string "true", number 1, null) to false. The default is one-shot — a false
+// recurring is передиктується людиною, а помилковий повтор дратує найсильніше.
+function normalizeRecurring(v: unknown): boolean {
+  return v === true;
+}
+
 function normalizeDaypart(v: unknown): Daypart | null {
   return typeof v === "string" && (DAYPARTS as readonly string[]).includes(v)
     ? (v as Daypart)
@@ -157,6 +164,8 @@ export function normalizeParseResponse(
     out.push({
       text,
       priority: normalizePriority(obj.priority),
+      // Recurrence flag (Крок 2): trusted only as a literal boolean, else false.
+      recurring: normalizeRecurring(obj.recurring),
       // Core produces "time" (a named moment) or "none" (unconditional). No today-default.
       condition: normalizeCondition(obj.condition),
     });

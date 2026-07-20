@@ -66,6 +66,7 @@ describe("Intent model extension — recurring & duration", () => {
       const parsed: ParsedIntent = {
         text: "купити квитки",
         priority: "medium",
+        recurring: false,
         condition: { type: "none" },
       };
       replaceCandidates([parsed]);

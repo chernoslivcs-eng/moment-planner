@@ -57,6 +57,10 @@ export type ConditionType = Condition["type"];
 export interface ParsedIntent {
   text: string;
   priority: Priority;
+  // Whether the intent repeats (Крок 2). Meaningful only for a location condition — a thing
+  // done every time the person is back in that city. The model sets it; validation coerces any
+  // non-boolean to false. Time/unconditional intents are always false.
+  recurring: boolean;
   condition: Condition;
 }
 
