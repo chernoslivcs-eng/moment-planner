@@ -30,6 +30,29 @@ export function weekdayIndex(name: string | null | undefined): number | null {
   return key in WEEKDAY_INDEX ? WEEKDAY_INDEX[key] : null;
 }
 
+// The browser's WALL-CALENDAR day as "YYYY-MM-DD", read from LOCAL components. This is the
+// "today" the client hands the parser so relative dates ("сьогодні"/"завтра"/"вчора") resolve
+// against the user's actual day. Deliberately NOT `toISOString()`: that emits a UTC date, which
+// after midnight in a positive-offset zone (Kyiv, UTC+3) still points at the PRIOR calendar day
+// — the night-shift bug where «сьогодні» parsed onto «вчора». Local getters never shift the day.
+export function localCalendarDate(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
+// Server-side resolution of the "today" the client sent. The client posts its LOCAL calendar
+// date (a plain "YYYY-MM-DD" from localCalendarDate); we trust that string VERBATIM — no Date
+// round-trip, no timezone conversion — because only the browser knows the user's zone. Anything
+// missing/malformed (a stale client, a bad body) falls back to the server's own local date.
+export function resolveTodayISODate(bodyToday: unknown, now: Date = new Date()): string {
+  if (typeof bodyToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(bodyToday)) {
+    return bodyToday;
+  }
+  return localCalendarDate(now);
+}
+
 export function addDays(date: Date, n: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + n);

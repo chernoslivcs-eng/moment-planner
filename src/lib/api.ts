@@ -4,6 +4,7 @@
 // The caller is responsible for preserving the user's text (roadmap §4).
 
 import type { ParsedIntent } from "./types";
+import { localCalendarDate } from "./dates";
 
 export type ParseErrorCode =
   | "empty"
@@ -28,7 +29,9 @@ export async function parseText(text: string): Promise<ParsedIntent[]> {
     res = await fetch("/api/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, today: new Date().toISOString() }),
+      // Send the user's LOCAL calendar date (not a UTC instant): after midnight in a positive
+      // offset zone, toISOString() reports the prior day, so «сьогодні» parsed onto «вчора».
+      body: JSON.stringify({ text, today: localCalendarDate(new Date()) }),
     });
   } catch {
     throw new ParseError("network", "Немає зв'язку. Перевір інтернет і спробуй ще раз.");

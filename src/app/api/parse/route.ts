@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { ParseFormatError, normalizeParseResponse } from "@/lib/parse/normalize";
 import { ProviderError, callModel } from "@/lib/parse/provider";
+import { resolveTodayISODate } from "@/lib/dates";
 
 export const runtime = "nodejs";
 
@@ -33,10 +34,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Client passes its own "today" so relative dates resolve against the user's day.
-  const todayDate = typeof body.today === "string" ? new Date(body.today) : new Date();
-  const today = Number.isNaN(todayDate.getTime()) ? new Date() : todayDate;
-  const todayISODate = today.toISOString().slice(0, 10);
+  // Client passes its own LOCAL calendar date ("YYYY-MM-DD") so relative dates resolve against
+  // the user's day. Trust that string verbatim — no UTC round-trip, which after midnight in a
+  // positive-offset zone would slice back to yesterday (the night date-shift bug).
+  const todayISODate = resolveTodayISODate(body.today);
+  const today = new Date(`${todayISODate}T00:00:00`);
 
   // One retry on unparseable output (roadmap §4: "повторний запит або чесне повідомлення").
   let lastFormatError: unknown = null;
