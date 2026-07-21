@@ -90,6 +90,15 @@ export function cityLocative(city: string): string {
   return CITY_LOCATIVE[city] ?? `у місті ${city}`;
 }
 
+// Крок 7 · Ланка 3 — натяк на розподіл до дедлайну, ЛИШЕ для екрана розбору. A deadline candidate
+// has no concrete hour yet (the commit step assigns it), so instead of the flat «Будь-коли» chip we
+// preview the cutoff the person named: «до 20:00 · розкладу по годинах». Reads the transient
+// `deadline` naive-ISO through the same zone-neutral `formatTime`, so the shown hour equals the
+// typed hour. Display only — never changes the commit-time distribution mechanics.
+export function describeDeadline(at: string): string {
+  return `до ${formatTime(at)} · розкладу по годинах`;
+}
+
 export interface DescribeConditionOptions {
   // Recurrence lives IN the condition wording (not a separate badge): a recurring location
   // reads «щоразу у Львові» instead of the flat city name. Only affects location conditions.

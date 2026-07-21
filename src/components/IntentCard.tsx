@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Condition, Priority } from "@/lib/types";
-import { describeCondition, priorityLabel } from "@/lib/format";
+import { describeCondition, describeDeadline, priorityLabel } from "@/lib/format";
 
 // Visual state of a card — the three-state language from the prototype.
 // State encodes WEIGHT only (not priority):
@@ -119,6 +119,7 @@ export function IntentCard({
   dismissLabel = "Прибрати з сьогодні",
   done = false,
   recurring = false,
+  deadline = null,
 }: {
   text: string;
   priority: Priority;
@@ -140,6 +141,11 @@ export function IntentCard({
   // be completed), and its condition chip reads «щоразу у Львові». The caller only sets this
   // for location + recurring; time/unconditional intents ignore it.
   recurring?: boolean;
+  // Крок 7 · Ланка 3 — TRANSIENT deadline hint, set ONLY on review-screen candidates that carry a
+  // cutoff (naive-ISO with an hour). When present the condition chip previews «до 20:00 · розкладу
+  // по годинах» with a clock, instead of the flat «Будь-коли» — because the concrete hour is
+  // assigned at commit, not yet. Saved intents never pass it (they already own a real condition).
+  deadline?: string | null;
 }) {
   const isGone = state === "gone";
 
@@ -230,10 +236,23 @@ export function IntentCard({
               {/* unified priority language: one colour dot, immediately before the chip */}
               <span className={`h-2 w-2 flex-none rounded-full ${DOT[priority]}`} aria-hidden />
               <span className="inline-flex items-center gap-1.5 rounded-full border border-clay/15 bg-clay/10 px-2.5 py-1 text-xs font-semibold text-ink-2">
-                <span className="text-clay">
-                  <ConditionIcon condition={condition} />
-                </span>
-                {describeCondition(condition, now, { recurring })}
+                {/* deadline hint (review only): clock + «до HH:MM · розкладу по годинах».
+                    The concrete hour lands at commit, so here we preview the cutoff, not «Будь-коли». */}
+                {deadline ? (
+                  <>
+                    <span className="text-clay">
+                      <ClockIcon />
+                    </span>
+                    {describeDeadline(deadline)}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-clay">
+                      <ConditionIcon condition={condition} />
+                    </span>
+                    {describeCondition(condition, now, { recurring })}
+                  </>
+                )}
               </span>
             </div>
           )}

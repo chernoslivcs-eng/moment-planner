@@ -457,6 +457,9 @@ function ReviewStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
               // (parity with «Заплановано»), so a candidate toggled to «повторюється» reads as
               // recurring BEFORE «Підтвердити», not only after it commits.
               recurring={c.recurring && c.condition.type === "location"}
+              // Крок 7 · Ланка 3 — deadline-кандидат ще безумовний у розборі (годину дасть коміт), тож
+              // замість «Будь-коли» картка натякає «до 20:00 · розкладу по годинах». Транзитний натяк.
+              deadline={c.deadline}
               // Tap the text to fix what was mis-heard — opens the shared editor (Крок 6 · Ланка 4).
               onEdit={() => setEditing(c)}
               // Розбір is a confirmation GATE (before save): the only per-card action is dropping a
