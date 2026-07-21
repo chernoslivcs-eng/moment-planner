@@ -89,6 +89,20 @@ function normalizeAt(v: unknown): string | null {
   return `${y}-${mo}-${d}T${hh}:${mi}:${ss}`;
 }
 
+// The transient deadline hint (Крок 7). A deadline is only meaningful as a CONCRETE CLOCK
+// cutoff (a time-of-day the tasks must be done by), so we accept a value ONLY when it carries an
+// explicit hour — a bare date ("до п'ятниці", no hour) is NOT a distribution deadline and stays
+// null (that case is handled by the ordinary time condition). We reuse normalizeAt to validate
+// the calendar moment, then require the source string actually contained "HH:MM".
+function normalizeDeadline(v: unknown): string | null {
+  const at = normalizeAt(v);
+  if (!at) return null;
+  // Guard: normalizeAt keeps date-only values (T00:00:00). A real cutoff must name an hour.
+  const s = toStr(v);
+  if (!s || !/[T ]\d{2}:\d{2}/.test(s)) return null;
+  return at;
+}
+
 // A city name the model resolved to nominative. We only trust a non-empty string here; the
 // declension work ("Львові" → "Львів") is the model's job (see prompt) — normalize never
 // invents or rewrites a city, it just guards against empty/garbage.
@@ -178,6 +192,9 @@ export function normalizeParseResponse(
       condition: normalizeCondition(obj.condition),
       // Approximate weight (Крок 5): a preset number or null. Never a fabricated minute count.
       duration: normalizeDuration(obj.duration),
+      // Transient deadline cutoff (Крок 7): a concrete-hour ISO or null. Consumed at commit by
+      // the distribution engine; never stored on a committed intent.
+      deadline: normalizeDeadline(obj.deadline),
     });
   }
   return out;

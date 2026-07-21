@@ -67,6 +67,14 @@ export interface ParsedIntent {
   // can't judge is null. Validation accepts ONLY a preset number, else null. Feeds the quiet
   // «приблизно на N годин» statement in Today.
   duration: number | null;
+  // TRANSIENT scheduling hint (Крок 7 «розподіл до дедлайну»). Set ONLY when the stream names an
+  // explicit CLOCK cutoff for doing tasks before it («N справ до 20:00»): the ISO cutoff, shared
+  // by every task in that group. It is NOT a stored field on a committed Intent — it is CONSUMED
+  // at commit, where the distribution engine turns each such task into a concrete `datetime`
+  // condition (working around occupied hours) and drops the hint. Absent/null = ordinary intent,
+  // no distribution. Deliberately kept off the polymorphic condition so the condition model stays
+  // untouched. Optional so existing ParsedIntent construction sites are unaffected.
+  deadline?: string | null;
 }
 
 // A parsed intent held in the Inbox review buffer (separate from the committed backlog),

@@ -10,6 +10,7 @@
 import { useSyncExternalStore } from "react";
 import type { Candidate, Condition, Intent, IntentEdit, ParsedIntent, Status } from "./types";
 import { DAYPARTS, DURATION_PRESETS, PRIORITIES, TIME_KINDS } from "./types";
+import { scheduleDeadlineCandidates } from "./schedule-apply";
 
 const INTENTS_KEY = "mp.intents.v1";
 const CANDIDATES_KEY = "mp.candidates.v1";
@@ -180,8 +181,11 @@ function openSignatures(): Set<string> {
 
 // Commit one candidate into the backlog with an explicit status (open by default, or done).
 export function commitCandidate(cid: string, status: Status = "open"): void {
-  const c = candidates.find((x) => x.cid === cid);
-  if (!c) return;
+  const found = candidates.find((x) => x.cid === cid);
+  if (!found) return;
+  // Крок 7: a deadline-carrying candidate is laid onto a concrete hour (working around today's
+  // committed `datetime` intents) BEFORE it materializes; a plain candidate is unchanged.
+  const c = scheduleDeadlineCandidates([found], intents, new Date())[0];
   // Drop it from the buffer regardless; only add to the backlog if it isn't already
   // an open intent (re-parsed duplicates confirm to a no-op instead of piling up).
   const isDuplicate = status === "open" && openSignatures().has(signature(c));
@@ -197,9 +201,15 @@ export function commitCandidate(cid: string, status: Status = "open"): void {
 // Commit every remaining candidate as an open intent (the "Підтвердити" gate).
 export function commitAllCandidates(): void {
   if (candidates.length === 0) return;
+  // Крок 7 — розподіл до дедлайну: BEFORE materializing, lay every deadline-carrying candidate
+  // onto a concrete hour before its cutoff, working around today's committed `datetime` intents
+  // AND each other. Plain candidates pass through untouched. Overflow stays unconditional (`none`),
+  // never dropped. This is the ONE place the whole batch is scheduled together, so a group like
+  // «три справи до 20:00» is distributed as a unit.
+  const scheduled = scheduleDeadlineCandidates(candidates, intents, new Date());
   const open = openSignatures();
   const materialized: Intent[] = [];
-  for (const c of candidates) {
+  for (const c of scheduled) {
     const sig = signature(c);
     if (open.has(sig)) continue; // already an open intent — don't duplicate into Today
     open.add(sig);
