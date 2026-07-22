@@ -124,3 +124,111 @@ describe("scheduleDeadlineCandidates", () => {
     expect(hourOf(out[0])).toBe(NAIVE(18));
   });
 });
+
+// F2/N3 (аудит): у ОДНОМУ «Підтвердити всі» дзвінок о 21:00 — ще datetime-КАНДИДАТ, не
+// закомічений intent. Пакувальник має бачити його як зайнятий слот так само, як committed intent,
+// інакше дедлайн-справи лягають ПОВЕРХ дзвінка. Ланцюг DEMO3: дзвінок 21:00 (60хв) + 3 справи по
+// 30хв до 23:00.
+describe("scheduleDeadlineCandidates — datetime-кандидати того ж пакета як occupied", () => {
+  // Non-deadline datetime candidate (e.g. «дзвінок о 21:00») committed in the SAME batch.
+  function callCand(at: string, duration: number): Candidate {
+    return cand({
+      text: "дзвінок",
+      duration,
+      condition: { type: "time", value: { kind: "datetime", at, weekday: null, daypart: null } },
+    });
+  }
+  // Does a placed task [at, at+dur) overlap the half-open window [winStart, winEnd)?
+  function overlapsWindow(at: string | null, durMin: number, winStart: string, winEnd: string): boolean {
+    if (!at) return false;
+    const s = new Date(at).getTime();
+    const e = s + durMin * 60_000;
+    const ws = new Date(winStart).getTime();
+    const we = new Date(winEnd).getTime();
+    return s < we && ws < e;
+  }
+
+  it("1) DEMO3 одним пакетом @14:00 — жодна справа не перетинає дзвінок 21:00–22:00", () => {
+    const batch = [
+      callCand(NAIVE(21), 60),
+      cand({ text: "A", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 30, deadline: NAIVE(23) }),
+    ];
+    const out = scheduleDeadlineCandidates(batch, [], DAY(14));
+    // Call passes through untouched.
+    expect(hourOf(out[0])).toBe(NAIVE(21));
+    // None of the three tasks overlaps the call's [21:00, 22:00) block.
+    for (const c of out.slice(1)) {
+      expect(overlapsWindow(hourOf(c), 30, NAIVE(21), NAIVE(22))).toBe(false);
+    }
+  });
+
+  it("2) DEMO3 одним пакетом @20:30 — три справи у вікні 20:30–23:00, обхід дзвінка, без накладок", () => {
+    const batch = [
+      callCand(NAIVE(21), 60),
+      cand({ text: "A", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 30, deadline: NAIVE(23) }),
+    ];
+    const out = scheduleDeadlineCandidates(batch, [], DAY(20, 30));
+    // A bumps below the call to 20:30; B/C hug the deadline at 22:00/22:30.
+    expect([hourOf(out[1]), hourOf(out[2]), hourOf(out[3])]).toEqual([NAIVE(20, 30), NAIVE(22), NAIVE(22, 30)]);
+    for (const c of out.slice(1)) {
+      expect(overlapsWindow(hourOf(c), 30, NAIVE(21), NAIVE(22))).toBe(false);
+    }
+  });
+
+  it("3) контроль: дзвінок закомічено ОКРЕМО раніше — поведінка не змінилась", () => {
+    const tasks = [
+      cand({ text: "A", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 30, deadline: NAIVE(23) }),
+    ];
+    const committedCall = [datetimeIntent(NAIVE(21), 60)];
+    const out = scheduleDeadlineCandidates(tasks, committedCall, DAY(20, 30));
+    expect(out.map(hourOf)).toEqual([NAIVE(20, 30), NAIVE(22), NAIVE(22, 30)]);
+  });
+
+  it("4) регрес: пакет без datetime-кандидата розкладається як було", () => {
+    const tasks = [
+      cand({ text: "A", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 30, deadline: NAIVE(23) }),
+    ];
+    const out = scheduleDeadlineCandidates(tasks, [], DAY(20, 30));
+    // No call to avoid → tasks hug the deadline: 21:30 / 22:00 / 22:30.
+    expect(out.map(hourOf)).toEqual([NAIVE(21, 30), NAIVE(22), NAIVE(22, 30)]);
+  });
+
+  it("5) вузьке вікно @22:15 — overflow у none без крашу", () => {
+    const batch = [
+      callCand(NAIVE(21), 60),
+      cand({ text: "A", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 30, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 30, deadline: NAIVE(23) }),
+    ];
+    const out = scheduleDeadlineCandidates(batch, [], DAY(22, 15));
+    expect(hourOf(out[0])).toBe(NAIVE(21)); // call untouched
+    expect(hourOf(out[3])).toBe(NAIVE(22, 30)); // only C fits
+    expect(out[1].condition.type).toBe("none"); // A overflow
+    expect(out[2].condition.type).toBe("none"); // B overflow
+    expect(out.every((c) => !c.deadline)).toBe(true);
+  });
+
+  it("6) два datetime-кандидати в одному пакеті — обидва в occupied", () => {
+    const batch = [
+      callCand(NAIVE(21), 60), // blocks [21,22)
+      callCand(NAIVE(19), 60), // blocks [19,20)
+      cand({ text: "A", duration: 60, deadline: NAIVE(23) }),
+      cand({ text: "B", duration: 60, deadline: NAIVE(23) }),
+      cand({ text: "C", duration: 60, deadline: NAIVE(23) }),
+      cand({ text: "D", duration: 60, deadline: NAIVE(23) }),
+    ];
+    const out = scheduleDeadlineCandidates(batch, [], DAY(14));
+    for (const c of out.slice(2)) {
+      expect(overlapsWindow(hourOf(c), 60, NAIVE(21), NAIVE(22))).toBe(false);
+      expect(overlapsWindow(hourOf(c), 60, NAIVE(19), NAIVE(20))).toBe(false);
+    }
+  });
+});
