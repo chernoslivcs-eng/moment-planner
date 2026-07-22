@@ -80,3 +80,89 @@ body::before {
   transform-origin: bottom;
   animation: mp-eq 0.85s ease-in-out infinite;
 }
+
+/* ── First-run onboarding (ported from moment-planner-onboarding reference) ──
+   Entrance choreography for the intro screen + the slide cross-fade. The shared
+   easing curve matches the reference `--ease`. Pure presentation — no behaviour. */
+:root {
+  --mp-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes mp-onb-dot-in {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes mp-onb-dot-halo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(180, 100, 63, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 13px rgba(180, 100, 63, 0);
+  }
+}
+@keyframes mp-onb-word-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mp-onb-line-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Intro logo dot: fades/scales in, then breathes a soft halo. */
+.mp-onb-dot {
+  opacity: 0;
+  transform: scale(0.2);
+  animation:
+    mp-onb-dot-in 1s var(--mp-ease) 0.25s forwards,
+    mp-onb-dot-halo 2.6s ease-in-out 1.5s infinite;
+}
+.mp-onb-word {
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: mp-onb-word-in 0.9s var(--mp-ease) 0.75s forwards;
+}
+/* Staggered lines/sub/CTA — per-element delay set inline via animation-delay. */
+.mp-onb-line {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: mp-onb-line-in 0.95s var(--mp-ease) forwards;
+}
+
+/* Slide cross-fade + horizontal glide (reference `.slide` / `.slide.on` / `.slide.left`). */
+.mp-onb-slide {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(24px);
+  transition:
+    opacity 0.42s var(--mp-ease),
+    transform 0.42s var(--mp-ease);
+}
+.mp-onb-slide.is-on {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+.mp-onb-slide.is-left {
+  transform: translateX(-24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-onb-dot,
+  .mp-onb-word,
+  .mp-onb-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .mp-onb-slide {
+    transition: none;
+  }
+}

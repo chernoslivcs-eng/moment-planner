@@ -10,6 +10,7 @@ import { buildToday, type TodayView } from "@/lib/today";
 import { pluralizeIntents } from "@/lib/format";
 import { useIntents } from "@/lib/store";
 import { useCurrentCity } from "@/lib/geo/currentCity";
+import { useOnboarding } from "@/components/OnboardingProvider";
 
 // Ambient marks that sit to the RIGHT of «Сьогодні» (prototype `.ctx`): a place pin and a
 // weather cloud, in the same thin linear family (ink-3, 1.7 stroke) as the rest of the product.
@@ -63,6 +64,8 @@ export default function TodayPage() {
   const [view, setView] = useState<TodayView>({ active: [], overdue: [] });
   // Current city (real geolocation → reverse-geocoding). null until resolved / if geo is silent.
   const city = useCurrentCity();
+  // Quiet re-entry into the first-run tour (does not reset the "seen" flag).
+  const { replay } = useOnboarding();
   const now = new Date();
 
   // Re-evaluate on every trigger (mount, tab focus, visibility) — never a one-shot compute
@@ -126,6 +129,15 @@ export default function TodayPage() {
           glyph={<ArrowDownGlyph />}
           title="Сьогодні тут спокійно"
           hint="Коли настане момент якогось наміру — він сам виринає сюди, готовий до дії. А поки що ніщо не тисне."
+          action={
+            <button
+              type="button"
+              onClick={replay}
+              className="mt-1 text-sm font-medium text-ink-3 underline decoration-line underline-offset-4 transition active:text-ink-2"
+            >
+              як це працює?
+            </button>
+          }
         />
       ) : (
         <TodaySections view={view} now={now} />

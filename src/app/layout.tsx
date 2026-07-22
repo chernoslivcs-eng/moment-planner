@@ -4,6 +4,7 @@ import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { CaptureSheetProvider } from "@/components/CaptureSheet";
 import { IntentEditorProvider } from "@/components/IntentEditorSheet";
+import { OnboardingProvider } from "@/components/OnboardingProvider";
 
 // Body text — Manrope. Cyrillic subset is mandatory (Ukrainian UI).
 const manrope = Manrope({
@@ -38,12 +39,14 @@ export default function RootLayout({
       className={`${manrope.variable} ${spectral.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <CaptureSheetProvider>
-          <IntentEditorProvider>
-            <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
-            <BottomNav />
-          </IntentEditorProvider>
-        </CaptureSheetProvider>
+        <OnboardingProvider>
+          <CaptureSheetProvider>
+            <IntentEditorProvider>
+              <div className="mx-auto flex min-h-screen max-w-md flex-col pb-24">{children}</div>
+              <BottomNav />
+            </IntentEditorProvider>
+          </CaptureSheetProvider>
+        </OnboardingProvider>
       </body>
     </html>
   );
