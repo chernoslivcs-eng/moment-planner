@@ -60,6 +60,27 @@ function occupiedFromIntents(intents: Intent[], now: Date): OccupiedSlot[] {
   return slots;
 }
 
+// The busy blocks that come from the SAME «Підтвердити всі» batch: a non-deadline candidate that
+// already names a concrete hour (a `datetime` condition, e.g. «дзвінок о 21:00») is a fixed
+// appointment the deadline-справи must route around — exactly like a committed intent, except it is
+// still a candidate at commit time. A deadline-carrying candidate is a task to be PLACED (its
+// condition gets overwritten), so it never occupies. Same-day + same default-block rules as
+// occupiedFromIntents.
+function occupiedFromCandidates(candidates: Candidate[], now: Date): OccupiedSlot[] {
+  const slots: OccupiedSlot[] = [];
+  for (const c of candidates) {
+    if (c.deadline) continue;
+    if (c.condition.type !== "time") continue;
+    const v = c.condition.value;
+    if (v.kind !== "datetime" || !v.at) continue;
+    const start = new Date(v.at);
+    if (Number.isNaN(start.getTime()) || !isSameLocalDay(start, now)) continue;
+    const durMin = typeof c.duration === "number" ? c.duration : DEFAULT_BLOCK_MIN;
+    slots.push({ start, end: new Date(start.getTime() + durMin * MINUTE) });
+  }
+  return slots;
+}
+
 export function scheduleDeadlineCandidates(
   candidates: Candidate[],
   existingIntents: Intent[],
@@ -68,9 +89,14 @@ export function scheduleDeadlineCandidates(
   // Nothing to distribute → return the array untouched (identity, so callers can cheaply detect it).
   if (!candidates.some((c) => c.deadline)) return candidates;
 
-  // Busy blocks from the committed backlog. Newly-placed tasks accumulate here so that, if the
+  // Busy blocks from the committed backlog AND from fixed-hour candidates of the same batch (a
+  // «дзвінок о 21:00» confirmed together with the deadline-справи is still a candidate here, but the
+  // tasks must route around it just the same). Newly-placed tasks accumulate here so that, if the
   // stream carries more than one deadline group, later groups also route around earlier placements.
-  const occupied = occupiedFromIntents(existingIntents, now);
+  const occupied = [
+    ...occupiedFromIntents(existingIntents, now),
+    ...occupiedFromCandidates(candidates, now),
+  ];
 
   // Group deadline candidates by their cutoff, preserving in-group order (input order == the order
   // the person listed them, which the engine maps to chronological order). Process groups by
