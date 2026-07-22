@@ -22,11 +22,31 @@ function getPosition(): Promise<GeolocationPosition | null> {
   });
 }
 
+// Pick the SETTLEMENT name from a Nominatim `address` block. Hard priority — a real settlement
+// (city → town → village) ALWAYS wins over an administrative unit (municipality «…ська громада»,
+// county); the admin fields are a last resort only when no settlement exists at all. This is why
+// the reverse query runs at zoom=12: at zoom=10 the settlement fields come back empty for smaller
+// cities (Львів, Славутич) and the chain used to fall through to the «…ська міська громада» admin
+// name, which no longer matched the intent's «Львів»/«Славутич». Pure + exported for unit testing.
+export function settlementFromAddress(
+  a: Record<string, string | undefined>,
+): string | null {
+  // First NON-BLANK field in priority order — a present-but-blank `city: "   "` must not shadow a
+  // real `town`, so `??` won't do (it only skips null/undefined). Settlement always beats admin.
+  for (const raw of [a.city, a.town, a.village, a.municipality, a.county]) {
+    const name = raw?.trim();
+    if (name) return name;
+  }
+  return null;
+}
+
 // Nominatim reverse geocode → the settlement name in Ukrainian (accept-language=uk gives the
 // nominative form, e.g. "Київ"), matching how the AI stores an intent's city. Null on any failure.
+// zoom=12 resolves the settlement node (city/town/village) rather than the coarser admin boundary
+// zoom=10 returns; see settlementFromAddress for the field priority.
 async function reverseGeocodeCity(lat: number, lon: number): Promise<string | null> {
   const url =
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1` +
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=12&addressdetails=1` +
     `&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&accept-language=uk`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS);
@@ -34,10 +54,7 @@ async function reverseGeocodeCity(lat: number, lon: number): Promise<string | nu
     const res = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
     if (!res.ok) return null;
     const data = (await res.json()) as { address?: Record<string, string> };
-    const a = data.address ?? {};
-    // Settlement level only (city phase — no districts/points): the first name that exists.
-    const name = a.city ?? a.town ?? a.village ?? a.municipality ?? a.county ?? null;
-    return name && name.trim().length > 0 ? name.trim() : null;
+    return settlementFromAddress(data.address ?? {});
   } catch {
     return null; // aborted / offline / bad JSON → silent
   } finally {
