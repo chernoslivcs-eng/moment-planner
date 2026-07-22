@@ -20,6 +20,13 @@ const TIME_TODAY: Condition = {
   type: "time",
   value: { kind: "date", at: "2026-07-20T00:00:00", weekday: null, daypart: null },
 };
+// Конкретна година на сьогодні: kind === "datetime". Це і є баг-кейс — година «15:00» є в даних,
+// але старий initialKey кидав такий намір у чип «сьогодні» (цілоденний, без поля години), тож
+// година ставала невидимою і виглядала втраченою.
+const DATETIME_TODAY: Condition = {
+  type: "time",
+  value: { kind: "datetime", at: "2026-07-20T15:00:00", weekday: null, daypart: null },
+};
 const DAYPART_EVENING: Condition = {
   type: "time",
   value: { kind: "daypart", at: null, weekday: null, daypart: "evening" },
@@ -198,6 +205,62 @@ describe("IntentEditor — умову НЕ чіпали → зберігаєть
       expect(cond.value.kind).toBe("date");
       expect(cond.value.at).toContain("2026-07-21");
     }
+  });
+});
+
+describe("IntentEditor — datetime-умова відкривається з видимою годиною", () => {
+  it("datetime на сьогодні → чип «обрати день», поля дати й часу заповнені", () => {
+    renderEditor({ condition: DATETIME_TODAY });
+    expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByLabelText("Дата")).toHaveValue("2026-07-20");
+    expect(screen.getByLabelText("Час")).toHaveValue("15:00");
+  });
+
+  it("date-умова на сьогодні (без години) → початковий чип «сьогодні»", () => {
+    renderEditor({ condition: TIME_TODAY });
+    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("datetime відкрито й не чіпано → «Готово» лишає умову цілою (година не втрачена)", () => {
+    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    // Умову не чіпали → патч її не містить, збережений намір лишається з datetime «15:00».
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("з datetime явно тапнути «сьогодні» → година свідомо зрізається (цілоденна умова)", () => {
+    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+    fireEvent.click(screen.getByRole("button", { name: "сьогодні" }));
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    const cond = onSave.mock.calls[0][0].condition as Condition;
+    expect(cond.type).toBe("time");
+    if (cond.type === "time") {
+      expect(cond.value.kind).toBe("date");
+      expect(cond.value.at).toContain("2026-07-20");
+      expect(cond.value.at?.slice(11, 16)).toBe("00:00");
+    }
+  });
+
+  it("daypart/weekday початковий мапінг не зламано (не стрибають на «обрати день»)", () => {
+    const { onCancel } = renderEditor({ condition: DAYPART_EVENING });
+    // daypart має at:null → лишається «обрати день»-fallback, але поля порожні, а не datetime.
+    expect(screen.getByLabelText("Дата")).toHaveValue("");
+    expect(screen.getByLabelText("Час")).toHaveValue("");
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });
 

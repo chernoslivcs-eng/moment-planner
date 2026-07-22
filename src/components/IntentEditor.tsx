@@ -37,6 +37,10 @@ function localDateISO(d: Date, time = "00:00"): string {
 function initialKey(condition: Condition, now: Date): CondKey {
   if (condition.type === "none") return "none";
   if (condition.type === "location") return "location";
+  // A concrete hour (datetime) must always open in the «обрати день» form so the time stays
+  // visible in the date/time fields — even when the date is today. The whole-day «сьогодні» chip
+  // has no hour field, so mapping a datetime-today there would hide the hour and it looks lost.
+  if (condition.value.kind === "datetime") return "custom";
   const at = condition.value.at;
   if (!at) return "custom";
   const day = new Date(at);
