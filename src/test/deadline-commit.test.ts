@@ -86,4 +86,53 @@ describe("commitAllCandidates — розподіл до дедлайну (про
     expect(saved).toHaveLength(1);
     expect(saved[0].condition).toEqual({ type: "none" });
   });
+
+  // Купа 3 (аудит, coverage gap): коли в ОДНОМУ пакеті є і deadline-кандидат, і кандидати з
+  // ВЖЕ названою умовою (location / конкретний datetime), пакет проходить повний шлях розподілу
+  // (identity-раннаут обходиться, бо some(deadline) === true). Незаймана умова НЕ deadline-
+  // кандидата мусить доїхати в backlog БАЙТ-У-БАЙТ — коміт не має її мутувати. Окремо: datetime-
+  // кандидат того ж пакета читається як occupied (Крок 1 фікс), але сам лишається незмінним.
+  it("умова НЕ deadline-кандидата не мутується, навіть коли в пакеті є deadline-справи", () => {
+    const deadline = naive(new Date(Date.now() + 6 * 60 * 60 * 1000));
+    const callAt = naive(new Date(Date.now() + 4 * 60 * 60 * 1000)); // фіксований дзвінок
+    replaceCandidates([
+      // 1) location-кандидат — умова має пройти незмінною
+      {
+        text: "зайти в аптеку",
+        priority: "medium",
+        recurring: false,
+        duration: 30,
+        condition: { type: "location", value: { city: "Львів" } },
+      },
+      // 2) фіксований datetime-кандидат — умова незмінна (і водночас occupied для розподілу)
+      {
+        text: "дзвінок з інвестором",
+        priority: "medium",
+        recurring: false,
+        duration: 60,
+        condition: { type: "time", value: { kind: "datetime", at: callAt, weekday: null, daypart: null } },
+      },
+      // 3) deadline-справа — ось вона й вмикає повний шлях розподілу
+      deadlineTask("зібрати сумку", deadline),
+    ]);
+    commitAllCandidates();
+
+    const saved = readIntents();
+    expect(saved).toHaveLength(3);
+
+    const apteka = saved.find((i) => i.text === "зайти в аптеку")!;
+    const call = saved.find((i) => i.text === "дзвінок з інвестором")!;
+    const bag = saved.find((i) => i.text === "зібрати сумку")!;
+
+    // location-умова доїхала байт-у-байт
+    expect(apteka.condition).toEqual({ type: "location", value: { city: "Львів" } });
+    // datetime-умова доїхала байт-у-байт (не зсунулась, хоч і слугувала occupied-блоком)
+    expect(call.condition).toEqual({
+      type: "time",
+      value: { kind: "datetime", at: callAt, weekday: null, daypart: null },
+    });
+    // а deadline-справа таки отримала конкретну годину
+    expect(bag.condition.type).toBe("time");
+    if (bag.condition.type === "time") expect(bag.condition.value.kind).toBe("datetime");
+  });
 });
