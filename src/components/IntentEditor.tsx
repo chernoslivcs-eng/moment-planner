@@ -33,14 +33,15 @@ function localDateISO(d: Date, time = "00:00"): string {
   return `${y}-${mo}-${da}T${time}:00`;
 }
 
-// Derive the initial UI key from an existing condition.
+// Derive the initial day-chip from an existing condition. Time is now an INDEPENDENT axis (its own
+// «Час» block), so the day chip is chosen purely by the DATE: датована умова (date OR datetime) на
+// сьогодні → «сьогодні», на завтра → «завтра», інша дата → «обрати день». The hour, if any, rides
+// separately in the time block (see the `customTime` prefill below) and no longer forces «обрати
+// день». Conditions with no concrete date (`daypart`/`weekday`, at:null) fall back to «обрати день»
+// with empty fields; left untouched they are preserved as-is on save (condTouched guard).
 function initialKey(condition: Condition, now: Date): CondKey {
   if (condition.type === "none") return "none";
   if (condition.type === "location") return "location";
-  // A concrete hour (datetime) must always open in the «обрати день» form so the time stays
-  // visible in the date/time fields — even when the date is today. The whole-day «сьогодні» chip
-  // has no hour field, so mapping a datetime-today there would hide the hour and it looks lost.
-  if (condition.value.kind === "datetime") return "custom";
   const at = condition.value.at;
   if (!at) return "custom";
   const day = new Date(at);
@@ -79,6 +80,19 @@ export function IntentEditor({
   const [condTouched, setCondTouched] = useState(false);
 
   const isLocation = condKey === "location";
+  // The three day chips (today/tomorrow/обрати день) are "time" conditions; «без умови» and «місце»
+  // are not — the «Час» block is only meaningful (and only shown) for the day chips.
+  const isDayChip = condKey === "today" || condKey === "tomorrow" || condKey === "custom";
+
+  // Fold the independent time axis into a chosen day: a filled `customTime` → concrete `datetime`,
+  // an empty one («—» / прибрано) → whole-day `date`. One helper so all three day chips agree.
+  function timeConditionFor(day: Date): Condition {
+    const at = customTime ? localDateISO(day, customTime) : localDateISO(day);
+    return {
+      type: "time",
+      value: { kind: customTime ? "datetime" : "date", at, weekday: null, daypart: null },
+    };
+  }
 
   function buildCondition(): Condition {
     switch (condKey) {
@@ -87,20 +101,11 @@ export function IntentEditor({
       case "location":
         return { type: "location", value: { city: city.trim() } };
       case "today":
-        return { type: "time", value: { kind: "date", at: localDateISO(now), weekday: null, daypart: null } };
+        return timeConditionFor(now);
       case "tomorrow":
-        return {
-          type: "time",
-          value: { kind: "date", at: localDateISO(addDays(now, 1)), weekday: null, daypart: null },
-        };
-      case "custom": {
-        const day = customDate ? new Date(`${customDate}T00:00:00`) : now;
-        const at = customTime ? localDateISO(day, customTime) : localDateISO(day);
-        return {
-          type: "time",
-          value: { kind: customTime ? "datetime" : "date", at, weekday: null, daypart: null },
-        };
-      }
+        return timeConditionFor(addDays(now, 1));
+      case "custom":
+        return timeConditionFor(customDate ? new Date(`${customDate}T00:00:00`) : now);
     }
   }
 
@@ -198,8 +203,9 @@ export function IntentEditor({
           {condPill("location", "місце")}
         </div>
 
+        {/* «Обрати день» показує ЛИШЕ дату — година тепер завжди в окремому блоці «Час» нижче. */}
         {condKey === "custom" ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3">
             <input
               type="date"
               aria-label="Дата"
@@ -210,17 +216,6 @@ export function IntentEditor({
               }}
               className="rounded-soft border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
             />
-            <input
-              type="time"
-              aria-label="Час"
-              value={customTime}
-              onChange={(e) => {
-                setCustomTime(e.target.value);
-                setCondTouched(true);
-              }}
-              className="rounded-soft border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
-            />
-            <span className="text-xs text-ink-3">необовʼязково — можна лише день</span>
           </div>
         ) : null}
 
@@ -266,6 +261,47 @@ export function IntentEditor({
           </div>
         ) : null}
       </div>
+
+      {/* Час — незалежна вісь. Видимий лише для денних чипів (сьогодні/завтра/обрати день);
+          для «без умови» і «місце» його нема. Необовʼязковий: «—» прибирає годину → цілий день. */}
+      {isDayChip ? (
+        <div className="mb-4">
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-ink-3/70">
+            Час
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="time"
+              aria-label="Час"
+              value={customTime}
+              onChange={(e) => {
+                setCustomTime(e.target.value);
+                setCondTouched(true);
+              }}
+              className="rounded-soft border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+            />
+            <button
+              type="button"
+              aria-label="Прибрати час"
+              aria-pressed={!customTime}
+              onClick={() => {
+                setCustomTime("");
+                setCondTouched(true);
+              }}
+              className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition active:scale-[0.97] ${
+                !customTime
+                  ? "border-clay bg-clay/10 text-ink"
+                  : "border-line bg-surface text-ink-2"
+              }`}
+            >
+              —
+            </button>
+            <span className="text-xs text-ink-3">
+              {customTime ? "конкретна година" : "без часу — цілий день"}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {/* Тривалість (тихі пресети, Крок 5) */}
       <div className="mb-5">

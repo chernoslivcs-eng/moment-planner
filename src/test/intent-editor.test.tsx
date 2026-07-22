@@ -27,6 +27,15 @@ const DATETIME_TODAY: Condition = {
   type: "time",
   value: { kind: "datetime", at: "2026-07-20T15:00:00", weekday: null, daypart: null },
 };
+const DATETIME_TOMORROW: Condition = {
+  type: "time",
+  value: { kind: "datetime", at: "2026-07-21T18:00:00", weekday: null, daypart: null },
+};
+const DATETIME_OTHER: Condition = {
+  type: "time",
+  value: { kind: "datetime", at: "2026-08-05T09:30:00", weekday: null, daypart: null },
+};
+const DATE_TODAY = TIME_TODAY; // date-kind, сьогодні, без години — читабельний аліас у тестах осі часу
 const DAYPART_EVENING: Condition = {
   type: "time",
   value: { kind: "daypart", at: null, weekday: null, daypart: "evening" },
@@ -208,59 +217,154 @@ describe("IntentEditor — умову НЕ чіпали → зберігаєть
   });
 });
 
-describe("IntentEditor — datetime-умова відкривається з видимою годиною", () => {
-  it("datetime на сьогодні → чип «обрати день», поля дати й часу заповнені", () => {
+// Редизайн: час — незалежна вісь. Денний чип (сьогодні/завтра/обрати день) обирає ДЕНЬ, окремий
+// блок «Час» тримає годину (необовʼязкову, зі станом «—»). datetime більше НЕ штовхає намір у
+// «обрати день» — день лишається собою, а година просто видима в блоці часу.
+describe("IntentEditor — вісь часу: мапінг при відкритті", () => {
+  it("datetime на сьогодні → чип «сьогодні» + блок часу з годиною", () => {
     renderEditor({ condition: DATETIME_TODAY });
+    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
-    expect(screen.getByLabelText("Дата")).toHaveValue("2026-07-20");
     expect(screen.getByLabelText("Час")).toHaveValue("15:00");
   });
 
-  it("date-умова на сьогодні (без години) → початковий чип «сьогодні»", () => {
-    renderEditor({ condition: TIME_TODAY });
-    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute(
+  it("datetime на завтра → чип «завтра» + блок часу з годиною", () => {
+    renderEditor({ condition: DATETIME_TOMORROW });
+    expect(screen.getByRole("button", { name: "завтра" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Час")).toHaveValue("18:00");
+  });
+
+  it("datetime на іншу дату → чип «обрати день» + дата + час", () => {
+    renderEditor({ condition: DATETIME_OTHER });
+    expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
+    expect(screen.getByLabelText("Дата")).toHaveValue("2026-08-05");
+    expect(screen.getByLabelText("Час")).toHaveValue("09:30");
+  });
+
+  it("date на сьогодні (без години) → чип «сьогодні», блок часу порожній", () => {
+    renderEditor({ condition: DATE_TODAY });
+    expect(screen.getByRole("button", { name: "сьогодні" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Час")).toHaveValue("");
+    // «—» (прибрано час) — активний стан за замовчуванням для цілоденної умови.
+    expect(screen.getByRole("button", { name: "Прибрати час" })).toHaveAttribute(
       "aria-pressed",
-      "false",
+      "true",
     );
   });
 
-  it("datetime відкрито й не чіпано → «Готово» лишає умову цілою (година не втрачена)", () => {
-    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+  it("daypart → денний чип (fallback «обрати день»), блок часу порожній", () => {
+    renderEditor({ condition: DAYPART_EVENING });
+    expect(screen.getByRole("button", { name: "обрати день" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Час")).toHaveValue("");
+  });
+});
+
+describe("IntentEditor — вісь часу: мапінг при збереженні", () => {
+  it("сьогодні + 15:00 → datetime сьогодні 15:00", () => {
+    const { onSave } = renderEditor({ condition: NONE });
+    fireEvent.click(screen.getByRole("button", { name: "сьогодні" }));
+    fireEvent.change(screen.getByLabelText("Час"), { target: { value: "15:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Готово" }));
-    // Умову не чіпали → патч її не містить, збережений намір лишається з datetime «15:00».
-    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+    const cond = onSave.mock.calls[0][0].condition as Condition;
+    expect(cond.type).toBe("time");
+    if (cond.type === "time") {
+      expect(cond.value.kind).toBe("datetime");
+      expect(cond.value.at).toBe("2026-07-20T15:00:00");
+    }
   });
 
-  it("з datetime явно тапнути «сьогодні» → година свідомо зрізається (цілоденна умова)", () => {
-    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+  it("завтра + 18:00 → datetime завтра 18:00", () => {
+    const { onSave } = renderEditor({ condition: NONE });
+    fireEvent.click(screen.getByRole("button", { name: "завтра" }));
+    fireEvent.change(screen.getByLabelText("Час"), { target: { value: "18:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    const cond = onSave.mock.calls[0][0].condition as Condition;
+    expect(cond.type).toBe("time");
+    if (cond.type === "time") {
+      expect(cond.value.kind).toBe("datetime");
+      expect(cond.value.at).toBe("2026-07-21T18:00:00");
+    }
+  });
+
+  it("сьогодні без часу → date сьогодні (цілий день)", () => {
+    const { onSave } = renderEditor({ condition: NONE });
     fireEvent.click(screen.getByRole("button", { name: "сьогодні" }));
     fireEvent.click(screen.getByRole("button", { name: "Готово" }));
     const cond = onSave.mock.calls[0][0].condition as Condition;
     expect(cond.type).toBe("time");
     if (cond.type === "time") {
       expect(cond.value.kind).toBe("date");
-      expect(cond.value.at).toContain("2026-07-20");
-      expect(cond.value.at?.slice(11, 16)).toBe("00:00");
+      expect(cond.value.at).toBe("2026-07-20T00:00:00");
     }
   });
 
-  it("daypart/weekday початковий мапінг не зламано (не стрибають на «обрати день»)", () => {
-    const { onCancel } = renderEditor({ condition: DAYPART_EVENING });
-    // daypart має at:null → лишається «обрати день»-fallback, але поля порожні, а не datetime.
-    expect(screen.getByLabelText("Дата")).toHaveValue("");
-    expect(screen.getByLabelText("Час")).toHaveValue("");
-    expect(onCancel).not.toHaveBeenCalled();
+  it("«—» прибирає годину в datetime-наміру → date, день збережений", () => {
+    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+    fireEvent.click(screen.getByRole("button", { name: "Прибрати час" }));
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    const cond = onSave.mock.calls[0][0].condition as Condition;
+    expect(cond.type).toBe("time");
+    if (cond.type === "time") {
+      expect(cond.value.kind).toBe("date");
+      expect(cond.value.at).toBe("2026-07-20T00:00:00"); // день той самий, година зрізана
+    }
+  });
+});
+
+describe("IntentEditor — вісь часу: регрес закритого багу (умову не чіпали → ціла)", () => {
+  it("datetime відкрито й не чіпано → «Готово» не кладе умову в патч (година жива)", () => {
+    const { onSave } = renderEditor({ condition: DATETIME_TODAY });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("daypart не чіпано → умова не в патчі (цілий)", () => {
+    const { onSave } = renderEditor({ condition: DAYPART_EVENING });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("weekday не чіпано → умова не в патчі (цілий)", () => {
+    const { onSave } = renderEditor({ condition: WEEKDAY_FRIDAY });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+});
+
+describe("IntentEditor — вісь часу: «без умови» / «місце» ховають блок часу", () => {
+  it("«без умови» → блоку часу нема, збереження = none", () => {
+    const { onSave } = renderEditor({ condition: NONE });
+    expect(screen.queryByLabelText("Час")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    // NONE не чіпали — умова не в патчі; але блок часу справді відсутній (головна перевірка).
+    expect(onSave.mock.calls[0][0].condition).toBeUndefined();
+  });
+
+  it("«місце» → блоку часу нема, збереження = location", () => {
+    const { onSave } = renderEditor({ condition: NONE });
+    fireEvent.click(screen.getByRole("button", { name: "місце" }));
+    expect(screen.queryByLabelText("Час")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: /місто/i }), {
+      target: { value: "Одеса" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+    expect(onSave.mock.calls[0][0].condition).toEqual({ type: "location", value: { city: "Одеса" } });
+  });
+
+  it("перемикання денний-чип → «без умови» ховає блок часу", () => {
+    renderEditor({ condition: DATETIME_TODAY });
+    expect(screen.getByLabelText("Час")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "без умови" }));
+    expect(screen.queryByLabelText("Час")).not.toBeInTheDocument();
   });
 });
 
