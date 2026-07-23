@@ -12,6 +12,7 @@
 // Touches no lib/store/parse/today logic — display-only, grouping done from exported helpers.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { IntentCard } from "@/components/IntentCard";
 import { EmptyState } from "@/components/EmptyState";
 import { useIntentEditor } from "@/components/IntentEditorSheet";
@@ -221,10 +222,35 @@ function renderCell(
   selectedKey: string | null,
   counts: Map<string, number>,
   onSelect: (key: string) => void,
+  hasToday: boolean,
+  onToday: () => void,
 ) {
   if (c.blank) return <span key={`b${i}`} className="aspect-square" aria-hidden />;
   const isToday = c.key === todayKey;
   const isSelected = c.key === selectedKey;
+
+  // Сьогодні — окремий випадок: тап НЕ фільтрує список, а веде на таб «Сьогодні» (та сама
+  // навігація, що в BottomNav). Крапка під ним — якщо на сьогодні є open-наміри (hasToday),
+  // включно з безумовними, що живуть у «Будь-коли». Той самий дот, що й під майбутніми днями.
+  if (isToday) {
+    return (
+      <button
+        key={c.key}
+        type="button"
+        aria-label={hasToday ? `${c.day} — сьогодні, є наміри` : `${c.day} — сьогодні`}
+        onClick={onToday}
+        className="relative flex aspect-square items-center justify-center rounded-xl bg-surface text-sm font-bold text-ink shadow-card transition active:scale-[0.94]"
+      >
+        {c.day}
+        {hasToday ? (
+          <span
+            className="absolute bottom-1.5 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-clay"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+    );
+  }
 
   if (counts.has(c.key)) {
     return (
@@ -285,11 +311,15 @@ function CalendarLens({
   counts,
   selectedKey,
   onSelect,
+  hasToday,
+  onToday,
 }: {
   now: Date;
   counts: Map<string, number>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  hasToday: boolean;
+  onToday: () => void;
 }) {
   const [mode, setMode] = useState<CalMode>("month");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -396,7 +426,9 @@ function CalendarLens({
           ))}
         </div>
         <div ref={gridRef} className="grid grid-cols-7 gap-1">
-          {cells.map((c, i) => renderCell(c, i, todayKey, selectedKey, counts, onSelect))}
+          {cells.map((c, i) =>
+            renderCell(c, i, todayKey, selectedKey, counts, onSelect, hasToday, onToday),
+          )}
         </div>
       </div>
     </div>
@@ -405,7 +437,11 @@ function CalendarLens({
 
 export default function PlannedPage() {
   const intents = useIntents();
+  const router = useRouter();
   const [waiting, setWaiting] = useState<Intent[]>([]);
+  // Чи є на сьогодні open-наміри (буквально те, що виринає в «Сьогодні»: active + overdue —
+  // усі open, включно з безумовними «Будь-коли»). Керує крапкою під сьогоднішнім днем календаря.
+  const [hasToday, setHasToday] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // The active filter tab. Mutually exclusive: the screen shows exactly one axis' slice.
   const [axis, setAxis] = useState<Axis>("time");
@@ -423,6 +459,8 @@ export default function PlannedPage() {
         if (cancelled) return;
         const surfaced = new Set([...view.active, ...view.overdue].map((i) => i.id));
         setWaiting(intents.filter((i) => i.status === "open" && !surfaced.has(i.id)));
+        // Сьогодні «має наміри», якщо buildToday хоч щось виринув (усе це — open-наміри дня).
+        setHasToday(view.active.length + view.overdue.length > 0);
       });
     };
     run();
@@ -518,6 +556,8 @@ export default function PlannedPage() {
               counts={dayCounts}
               selectedKey={selectedKey}
               onSelect={(key) => setSelectedKey((prev) => (prev === key ? null : key))}
+              hasToday={hasToday}
+              onToday={() => router.push("/today")}
             />
 
             {selectedKey ? (

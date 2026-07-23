@@ -5,6 +5,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+
+// PlannedPage тепер бере useRouter (тап на «сьогодні» в календарі → /today). Тут навігація не
+// перевіряється — заглушаємо, щоб app-router-контекст не був обов'язковим у jsdom.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 import PlannedPage from "@/app/planned/page";
 import { IntentEditorProvider } from "@/components/IntentEditorSheet";
 import {
